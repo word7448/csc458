@@ -3,6 +3,7 @@
 #include <string.h>
 #include "sr_protocol.h"
 #include "sr_utils.h"
+#include "sr_router.h"
 
 
 uint16_t cksum (const void *_data, int len) {
@@ -183,3 +184,19 @@ void print_hdrs(uint8_t *buf, uint32_t length) {
   }
 }
 
+/* Returns the mac address of an interface*/
+unsigned char* whats_my_mac(struct sr_instance *sr, char *interface)
+{
+	struct sr_if *list_entry = sr->if_list;
+	while(list_entry != NULL)
+	{
+		if(strcmp(interface, list_entry->name))
+		{
+			return list_entry->addr;
+		}
+		list_entry = list_entry->next;
+	}
+
+	unsigned char idk[] = "DontKnow";
+	return idk;
+}

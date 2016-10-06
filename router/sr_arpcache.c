@@ -27,7 +27,25 @@ void sr_arpcache_sweepreqs(struct sr_instance *sr) {
 		   struct sr_packet *sol = request->packets;
 		   while(sol != NULL)
 		   {
-			   /*create icmp fail*/
+			   /*make original packet internals easily accessible*/
+			   sr_ethernet_hdr_t *orig_eheader = sol->buf;
+
+			   /*create icmp fail and make its internals easily accessible*/
+			   int fail_length = sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_t3_hdr_t) + 4;
+			   uint8_t *fail = malloc(sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_t3_hdr_t) + 4);
+			   sr_ethernet_hdr_t *fail_eheader = fail;
+			   sr_ip_hdr_t *fail_ipheader = fail + sizeof(sr_ethernet_hdr_t);
+			   sr_icmp_t3_hdr_t*fail_icmp = fail + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t);
+			   uint32_t *fail_crc = fail + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_t3_hdr_t);
+
+			   /*fill in ethernet header*/
+			   memcpy(fail_eheader->ether_dhost, orig_eheader->ether_shost, 6);
+			   unsigned char *my_mac = whats_my_mac(sr, sol->iface);
+			   memcpy(fail_eheader->ether_shost, my_mac, strlen(my_mac));
+			   fail_eheader->ether_type = ethertype_ip;
+
+			   /*fill in ip header*/
+
 
 			   sol = sol->next;
 		   }

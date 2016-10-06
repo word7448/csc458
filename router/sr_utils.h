@@ -27,6 +27,7 @@
 
 #ifndef SR_UTILS_H
 #define SR_UTILS_H
+#include "sr_router.h"
 
 uint16_t cksum(const void *_data, int len);
 
@@ -44,5 +45,6 @@ void print_hdr_arp(uint8_t *buf);
 
 /* prints all headers, starting from eth */
 void print_hdrs(uint8_t *buf, uint32_t length);
+unsigned char* whats_my_mac(struct sr_instance *sr, char *interface);
 
 #endif /* -- SR_UTILS_H -- */
