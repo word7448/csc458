@@ -86,20 +86,24 @@ void sr_handlepacket(struct sr_instance* sr,
   print_addr_eth(header->ether_shost);
   printf("dest mac\n");
   print_addr_eth(header->ether_dhost);
-  switch(ethertype(packet))
+  uint32_t *crc = packet + len - 4;
+  printf("crc in decimal and hexadecimal, %d, %x\n", *crc, *crc);
+
+  uint16_t useable_type = ethertype(packet);
+  if(useable_type == ethertype_arp)
   {
-  case ethertype_arp:
 	  sr_arp_hdr_t *arpheader = (packet + sizeof(sr_ethernet_hdr_t));
 	  printf("arp request for ip: \n");
-	  print_addr_ip(arpheader->ar_tip);
-	  struct sr_arpreq *sr_arpcache_queuereq(sr->cache, arpheader->ar_tip, packet, len, interface); //not doing anything with the result currently
-	  break;
-  case ethertype_ip:
+	  print_addr_ip_int(arpheader->ar_tip);
+	  struct sr_arpreq *result = sr_arpcache_queuereq(&(sr->cache), arpheader->ar_tip, packet, len, interface); /*not doing anything with the result currently*/
+  }
+  else if(useable_type == ethertype_ip)
+  {
 	  printf("got an ip packet\n");
-	  break;
-  default:
+  }
+  else
+  {
 	  printf("got something mysterious\n");
-	  break;
   }
   /* fill in code here */
 

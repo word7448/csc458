@@ -17,17 +17,17 @@
   See the comments in the header file for an idea of what it should look like.
 */
 void sr_arpcache_sweepreqs(struct sr_instance *sr) { 
-   struct sr_arpreq *request = sr->cache->requests;
+   struct sr_arpreq *request = sr->cache.requests;
    struct sr_arpreq *next;
    while(request != NULL)
    {
-	   next = request->next;//save the next right away just in case the request disappears because it was too many times
+	   next = request->next; /*save the next right away just in case the request disappears because it was too many times*/
 	   if(request->times_sent >= 5)
 	   {
 		   struct sr_packet *sol = request->packets;
 		   while(sol != NULL)
 		   {
-			   //create icmp fail
+			   /*create icmp fail*/
 
 			   sol = sol->next;
 		   }
