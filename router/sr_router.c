@@ -47,6 +47,9 @@ void sr_init(struct sr_instance* sr)
     pthread_create(&thread, &(sr->attr), sr_arpcache_timeout, sr);
     
     /* Add initialization code here! */
+    printf("size of sr_ethernet_hdr_t %d\n", sizeof(sr_ethernet_hdr_t));
+    printf("size of sr_arp_hdr_t %d\n", sizeof(sr_arp_hdr_t));
+    printf("size of sr_ip_hdr_t %d\n", sizeof(sr_ip_hdr_t));
 
 } /* -- sr_init -- */
 
@@ -78,6 +81,26 @@ void sr_handlepacket(struct sr_instance* sr,
 
   printf("*** -> Received packet of length %d \n",len);
 
+  sr_ethernet_hdr_t *header = packet;
+  printf("source mac\n");
+  print_addr_eth(header->ether_shost);
+  printf("dest mac\n");
+  print_addr_eth(header->ether_dhost);
+  switch(ethertype(packet))
+  {
+  case ethertype_arp:
+	  sr_arp_hdr_t *arpheader = (packet + sizeof(sr_ethernet_hdr_t));
+	  printf("arp request for ip: \n");
+	  print_addr_ip(arpheader->ar_tip);
+	  struct sr_arpreq *sr_arpcache_queuereq(sr->cache, arpheader->ar_tip, packet, len, interface); //not doing anything with the result currently
+	  break;
+  case ethertype_ip:
+	  printf("got an ip packet\n");
+	  break;
+  default:
+	  printf("got something mysterious\n");
+	  break;
+  }
   /* fill in code here */
 
 }/* end sr_ForwardPacket */
