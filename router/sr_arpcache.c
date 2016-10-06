@@ -40,8 +40,7 @@ void sr_arpcache_sweepreqs(struct sr_instance *sr) {
 
 			   /*fill in ethernet header*/
 			   memcpy(fail_eheader->ether_dhost, orig_eheader->ether_shost, 6);
-			   unsigned char *my_mac = whats_my_mac(sr, sol->iface);
-			   memcpy(fail_eheader->ether_shost, my_mac, strlen(my_mac));
+			   memcpy(fail_eheader->ether_shost, whats_my_mac(sr, sol->iface), 6);
 			   fail_eheader->ether_type = ethertype_ip;
 
 			   /*fill in ip header*/
