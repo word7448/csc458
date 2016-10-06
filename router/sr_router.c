@@ -53,7 +53,7 @@ void sr_init(struct sr_instance* sr)
 	/* Add initialization code here! */
 	printf("size of sr_ethernet_hdr_t %d\n", sizeof(sr_ethernet_hdr_t));
 	printf("size of sr_arp_hdr_t %d\n", sizeof(sr_arp_hdr_t));
-	printf("size of sr_ip_hdr_t %d\n", sizeof(sr_ip_hdr_t));
+	printf("size of sr_ip_hdr_t %d\n", sizeof(sr_ip_hdr_t));	
 
 
 
@@ -85,41 +85,25 @@ void sr_handlepacket(struct sr_instance* sr,
 	assert(packet);
 	assert(interface);
 
-	printf("*** -> Received packet of length %d \n", len);
-
+	printf("*** -> Received packet of length %d \n", len);	
+	
 	sr_ethernet_hdr_t *header = packet;
 
-	sr_ip_hdr_t *iphdr = packet + sizeof(sr_ethernet_hdr_t);
-
-	printf("source mac\n");
-	print_addr_eth(header->ether_shost);
-	printf("dest mac\n");
-	print_addr_eth(header->ether_dhost);
-	uint32_t *crc = packet + len - 4;
-	printf("crc in decimal and hexadecimal, %d, %x\n", *crc, *crc); // I get the feeling they're not giving us the ethernet crc, struct is too small for it
-
-	uint32_t ccrc = (crc32_bitwise(packet, len - 4, 0));
-	//printf("crc in decimal and hexadecimal, %d, %x\n", ccrc, ccrc);
-	uint16_t cccrc = cksum(packet, len - 4);
-	//printf("crc in decimal and hexadecimal, %d, %x\n", cccrc, cccrc);
-
+	print_hdr_eth(packet);
+	
 
 	uint16_t useable_type = ethertype(packet);
 
 	switch (useable_type) {
 	case ethertype_arp:
 	{
-		sr_arp_hdr_t *arpheader = (packet + sizeof(sr_ethernet_hdr_t));
-		print_hdr_arp(arpheader);
-		printf("arp request for ip: \n");
-		struct sr_arpreq *result = sr_arpcache_queuereq(&(sr->cache), arpheader->ar_tip, packet, len, interface); /*not doing anything with the result currently*/
+		handle_arp(sr,packet, len, interface);
 		break;
 	}
 	case ethertype_ip:
 	{
-		sr_ip_hdr_t *ipheader = (packet + sizeof(sr_ethernet_hdr_t));
-		print_hdr_ip(ipheader);
-		printf("got an ip packet\n");
+		handle_ip(sr, packet, len, interface);
+		break;
 	}
 	default:
 		printf("got something mysterious\n");
@@ -127,6 +111,26 @@ void sr_handlepacket(struct sr_instance* sr,
 	}
 }/* end sr_ForwardPacket */
 
+
+
+
+// Keeping methods out of the sr_handle
+// Make another file for it?
+
+// Takes an ARP packet and deals with it
+void handle_arp(struct sr_instance* sr, uint8_t * packet, unsigned int len, char* interface) {
+	sr_arp_hdr_t *arpheader = (packet + sizeof(sr_ethernet_hdr_t));
+	print_hdr_arp(arpheader);
+	struct sr_arpreq *result = sr_arpcache_queuereq(&(sr->cache), arpheader->ar_tip, packet, len, interface); /*not doing anything with the result currently*/
+
+}
+
+// Takes an IP packet and deals with it
+void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char* interface) {
+	sr_ip_hdr_t *ipheader = (packet + sizeof(sr_ethernet_hdr_t));
+	print_hdr_ip(ipheader);
+	printf("got an ip packet\n");
+}
 
 const uint32_t Polynomial = 0xEDB88320;
 
