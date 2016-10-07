@@ -96,7 +96,167 @@ void sr_handlepacket(struct sr_instance* sr,
 
 	printf("*** -> Received packet of length %d \n", len);	
 	
-	    /* packet is not for router, dest somewhere else, do TTL decrement*/
+	/*sr_ethernet_hdr_t *header = (sr_ethernet_hdr_t*)packet;*/
+
+	print_hdr_eth(packet);
+	
+
+	uint16_t useable_type = ethertype(packet);
+
+	switch (useable_type) {
+	case ethertype_arp:
+	{
+		handle_arp(sr,packet, len, interface);
+		break;
+	}
+	case ethertype_ip:
+	{
+		handle_ip(sr, packet, len, interface);
+		break;
+	}
+	default:
+		printf("got something mysterious\n");
+
+	}
+}/* end sr_ForwardPacket */
+
+
+
+
+/* Keeping methods out of the sr_handle
+ Make another file for it?*/
+
+/* Takes an ARP packet and deals with it */
+void handle_arp(struct sr_instance* sr, uint8_t * packet, unsigned int len, char* interface) {
+	sr_arp_hdr_t *arpheader = (packet + sizeof(sr_ethernet_hdr_t));
+	print_hdr_arp(arpheader);
+	struct sr_arpreq *result = sr_arpcache_queuereq(&(sr->cache), arpheader->ar_tip, packet, len, interface); /*not doing anything with the result currently*/
+
+}
+
+/* Takes an IP packet and deals with it */
+void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char* interface) {
+    
+    /* REQUIRES */
+    assert(sr);
+    assert(packet);
+    assert(interface);
+    
+    /* Get ethernet header */
+    sr_ethernet_hdr_t *ethernet_header = (sr_ethernet_hdr_t *) packet;
+    
+    /* Get IP header */
+    sr_ip_hdr_t *ip_header = (sr_ip_hdr_t *) (packet + sizeof(sr_ethernet_hdr_t));
+    
+	print_hdr_ip(ip_header);
+	printf("got an ip packet\n");
+    
+    int check_packet = sanity_check(len, ip_header);
+    if (check_packet == 1) {
+        fprintf(stderr, "Packet dropped\n");
+        return;
+    }
+    
+    /* get packet interface*/
+    struct sr_if *node = 0;
+    node = sr->if_list;
+    
+    while(node){
+        if(node->ip == ip_header->ip_dst){
+            break;
+        }
+        node = node->next;
+    }
+
+    if (sr_get_interface(sr, interface) != 0) {
+        uint8_t ip_type = ip_protocol(packet + sizeof(sr_ethernet_hdr_t));
+        /* Get ICMP header */
+        sr_icmp_hdr_t* icmp_header = (sr_icmp_hdr_t*)(packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
+        
+        switch (ip_type) {
+            
+            case ip_protocol_tcp:
+            case ip_protocol_udp:
+                
+                fprintf(stdout,"Recieved TCP or UDP Packet. Sending 'ICMP: Port Unreachable' to Source. \n");
+                
+                int size = sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_t3_hdr_t);
+                uint8_t *reply_packet = (uint8_t *) malloc(size);
+                
+                sr_ethernet_hdr_t *eth_hdr = malloc(sizeof(sr_ethernet_hdr_t));
+                memcpy(eth_hdr, (sr_ethernet_hdr_t *) packet, sizeof(sr_ethernet_hdr_t));
+                
+                /* Make IP header */
+                sr_ip_hdr_t *reply_ip_hdr = (sr_ip_hdr_t *)(reply_packet + sizeof(sr_ethernet_hdr_t));
+                reply_ip_hdr->ip_v = 4;
+                reply_ip_hdr->ip_hl = sizeof(sr_ip_hdr_t)/4;
+                reply_ip_hdr->ip_tos = 0;
+                reply_ip_hdr->ip_len = htons(sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_t3_hdr_t));
+                reply_ip_hdr->ip_id = htons(0);
+                reply_ip_hdr->ip_off = htons(IP_DF);
+                reply_ip_hdr->ip_ttl = 64;
+                reply_ip_hdr->ip_dst = ip_header->ip_src;
+                reply_ip_hdr->ip_p = ip_protocol_icmp;
+                reply_ip_hdr->ip_src = node->ip;
+                reply_ip_hdr->ip_sum = 0;
+                reply_ip_hdr->ip_sum = cksum(reply_ip_hdr, sizeof(sr_ip_hdr_t));
+
+                
+                /* Make ethernet header */
+                sr_ethernet_hdr_t *reply_eth_hdr = (sr_ethernet_hdr_t *)reply_packet;
+                memcpy(reply_eth_hdr->ether_dhost, eth_hdr->ether_shost, sizeof(sr_ethernet_hdr_t));
+                memcpy(reply_eth_hdr->ether_shost, sr_get_interface(sr, interface)->addr, sizeof(sr_ethernet_hdr_t));
+                reply_eth_hdr->ether_type = htons(ethertype_ip);
+                
+                
+                /* Make ICMP Header */
+                sr_icmp_t3_hdr_t *reply_icmp_hdr = (sr_icmp_t3_hdr_t *)(reply_packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
+                reply_icmp_hdr->icmp_type = ICMP_UNREACHABLE;
+                reply_icmp_hdr->icmp_code = 3;
+                reply_icmp_hdr->unused = 0;
+                reply_icmp_hdr->next_mtu = 0;
+                reply_icmp_hdr->icmp_sum = 0;
+                memcpy(reply_icmp_hdr->data, ip_header, ICMP_DATA_SIZE);
+                reply_icmp_hdr->icmp_sum = cksum(reply_icmp_hdr, sizeof(sr_icmp_t3_hdr_t));
+                sr_send_packet(sr, reply_packet, len, interface);
+                
+                break;
+                
+            case ip_protocol_icmp:
+                
+                if (icmp_header->icmp_type == ICMP_ECHO_REQ) {
+                    /* Make ethernet header */
+                    memcpy(ethernet_header->ether_dhost, ethernet_header->ether_shost, sizeof(uint8_t)*ETHER_ADDR_LEN);
+                    memcpy(ethernet_header->ether_shost, sr_get_interface(sr, interface)->addr, sizeof(uint8_t)*ETHER_ADDR_LEN);
+                    
+                    /* Make IP header */
+                    /* Now update it */
+                    uint32_t new_dest = ip_header->ip_src;
+                    ip_header->ip_sum = cksum(ip_header, sizeof(sr_ip_hdr_t));
+                    ip_header->ip_src = ip_header->ip_dst;
+                    ip_header->ip_dst = new_dest;
+                    ip_header->ip_sum = 0;
+
+                    
+                    /* Make ICMP Header */
+                    icmp_header->icmp_type = ICMP_ECHO_REPLY;
+                    icmp_header->icmp_code = 0;
+                    icmp_header->icmp_sum = 0;
+                    icmp_header->icmp_sum = cksum(icmp_header, len-sizeof(sr_ethernet_hdr_t)-sizeof(sr_ip_hdr_t));
+                    print_hdrs(packet, len);
+                    sr_send_packet(sr, packet, len, interface);
+                    
+                }
+                break;
+    
+    
+            default:
+                fprintf(stdout,"Recieved unknown ICMP Message type.\n");
+                break;
+        }
+        return;
+    }
+    /* packet is not for router, dest somewhere else, do TTL decrement*/
     
 }
 
