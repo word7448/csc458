@@ -46,5 +46,6 @@ void print_hdr_arp(uint8_t *buf);
 /* prints all headers, starting from eth */
 void print_hdrs(uint8_t *buf, uint32_t length);
 unsigned char* whats_my_mac(struct sr_instance *sr, char *interface);
+uint32_t whats_my_ip(struct sr_instance *sr, char *interface);
 
 #endif /* -- SR_UTILS_H -- */

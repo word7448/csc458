@@ -24,6 +24,8 @@
 
 /*Global*/
 static uint32_t* crc32Lookup;
+void handle_arp(struct sr_instance* sr, uint8_t * packet, unsigned int len, char* interface);
+void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char* interface);
 uint32_t crc32_bitwise(const void* data, size_t length, uint32_t previousCrc32);
 
 /*---------------------------------------------------------------------

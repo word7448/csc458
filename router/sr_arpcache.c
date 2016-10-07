@@ -21,33 +21,58 @@ void sr_arpcache_sweepreqs(struct sr_instance *sr) {
    struct sr_arpreq *next;
    while(request != NULL)
    {
-	   next = request->next; /*save the next right away just in case the request disappears because it was too many times*/
+	   next = request->next; /*DT*save the next right away just in case the request disappears because it was too many times*/
 	   if(request->times_sent >= 5)
 	   {
-		   struct sr_packet *sol = request->packets;
-		   while(sol != NULL)
+		   struct sr_packet *failed_packet = request->packets;
+		   while(failed_packet != NULL)
 		   {
-			   /*make original packet internals easily accessible*/
-			   sr_ethernet_hdr_t *orig_eheader = sol->buf;
+			   /*DT*make original packet internals easily accessible*/
+			   sr_ethernet_hdr_t *orig_eheader = failed_packet->buf;
+			   sr_arp_hdr_t *orig_aheader = failed_packet->buf + sizeof(sr_ip_hdr_t);
 
-			   /*create icmp fail and make its internals easily accessible*/
+			   /*DT*create icmp fail and make its internals easily accessible*/
 			   int fail_length = sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_t3_hdr_t) + 4;
-			   uint8_t *fail = malloc(sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_t3_hdr_t) + 4);
+			   uint8_t *fail = malloc(fail_length);
 			   sr_ethernet_hdr_t *fail_eheader = fail;
 			   sr_ip_hdr_t *fail_ipheader = fail + sizeof(sr_ethernet_hdr_t);
 			   sr_icmp_t3_hdr_t*fail_icmp = fail + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t);
 			   uint32_t *fail_crc = fail + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_t3_hdr_t);
 
-			   /*fill in ethernet header*/
+			   /*DT*fill in ethernet header*/
 			   memcpy(fail_eheader->ether_dhost, orig_eheader->ether_shost, 6);
-			   memcpy(fail_eheader->ether_shost, whats_my_mac(sr, sol->iface), 6);
+			   memcpy(fail_eheader->ether_shost, whats_my_mac(sr, failed_packet->iface), 6);
 			   fail_eheader->ether_type = ethertype_ip;
 
-			   /*fill in ip header*/
+			   /*DT*fill in ip header*/
+			   fail_ipheader->ip_tos = 0;
+			   fail_ipheader->ip_len = fail_length - sizeof(sr_ethernet_hdr_t) -4; /*DT*everything but the ethernet header*/
+			   fail_ipheader->ip_id = 0;
+			   fail_ipheader->ip_off = 0;
+			   fail_ipheader->ip_ttl = 64;
+			   fail_ipheader->ip_p = ip_protocol_icmp;
+			   fail_ipheader->ip_src = whats_my_ip(sr, failed_packet->iface);
+			   fail_ipheader->ip_dst = orig_aheader->ar_sip;
+			   /*DT* crc not filled in*/
 
+			   /*DT* fill in the icmp stuff*/
+			   /*DT* wikipedia: https://en.wikipedia.org/wiki/Internet_Control_Message_Protocol */
+			   fail_icmp->icmp_type = 3;
+			   fail_icmp->icmp_code = 1;
+			   fail_icmp->unused = 0; /*DT* zero out to make sure old heap garbage doesn't screw this up */
+			   fail_icmp->next_mtu = 0; /*DT* according to wikipedia, you only fill this in for code 4*/
+			   memcpy(fail_icmp->data, fail_ipheader, sizeof(sr_ip_hdr_t));
+			   /*DT* crc not filled in too*/
 
-			   sol = sol->next;
+			   sr_send_packet(sr, fail, fail_length, failed_packet->iface);
+
+			   failed_packet = failed_packet->next;
 		   }
+		   sr_arpreq_destroy(sr, request); /*DT* this request is hopeless. failures have been sent. get rid of it*/
+	   }
+	   else
+	   {
+
 	   }
 	   request = next;
    }

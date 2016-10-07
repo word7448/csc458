@@ -184,7 +184,7 @@ void print_hdrs(uint8_t *buf, uint32_t length) {
   }
 }
 
-/* Returns the mac address of an interface*/
+/*DT* Returns the mac address of an interface*/
 unsigned char* whats_my_mac(struct sr_instance *sr, char *interface)
 {
 	struct sr_if *list_entry = sr->if_list;
@@ -199,4 +199,20 @@ unsigned char* whats_my_mac(struct sr_instance *sr, char *interface)
 
 	unsigned char idk[] = "DontKnow";
 	return idk;
+}
+
+/*DT* Returns the ip of an interface*/
+uint32_t whats_my_ip(struct sr_instance *sr, char *interface)
+{
+	struct sr_if *list_entry = sr->if_list;
+	while(list_entry != NULL)
+	{
+		if(strcmp(interface, list_entry->name))
+		{
+			return list_entry->ip;
+		}
+		list_entry = list_entry->next;
+	}
+
+	return 0;
 }
