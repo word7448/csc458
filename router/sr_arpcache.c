@@ -22,6 +22,9 @@ void sr_arpcache_sweepreqs(struct sr_instance *sr) {
    while(request != NULL)
    {
 	   next = request->next; /*DT*save the next right away just in case the request disappears because it was too many times*/
+	   time_t now = time(NULL); /*DT* in seconds since new years 1970*/
+	   time_t diff = now = request->sent;
+
 	   if(request->times_sent >= 5)
 	   {
 		   struct sr_packet *failed_packet = request->packets;
@@ -70,9 +73,14 @@ void sr_arpcache_sweepreqs(struct sr_instance *sr) {
 		   }
 		   sr_arpreq_destroy(sr, request); /*DT* this request is hopeless. failures have been sent. get rid of it*/
 	   }
+	   else if(diff >= 1)
+	   {
+		   request->sent = now;
+		   request->times_sent++;
+	   }
 	   else
 	   {
-
+		   printf("difference is less than 1 (%d). it's too soon to try again\n", diff);
 	   }
 	   request = next;
    }
