@@ -124,21 +124,21 @@ void print_hdr_icmp(uint8_t *buf) {
 void print_hdr_arp(uint8_t *buf) {
   sr_arp_hdr_t *arp_hdr = (sr_arp_hdr_t *)(buf);
   fprintf(stderr, "ARP header\n");
-  fprintf(stderr, "\thardware type: %d\n", ntohs(arp_hdr->ar_hrd));
-  fprintf(stderr, "\tprotocol type: %d\n", ntohs(arp_hdr->ar_pro));
-  fprintf(stderr, "\thardware address length: %d\n", arp_hdr->ar_hln);
-  fprintf(stderr, "\tprotocol address length: %d\n", arp_hdr->ar_pln);
+  fprintf(stderr, "\thardware type: %d\n", ntohs(arp_hdr->ar_hardware_type));
+  fprintf(stderr, "\tprotocol type: %d\n", ntohs(arp_hdr->ar_protocol_type));
+  fprintf(stderr, "\thardware address length: %d\n", arp_hdr->ar_mac_addr_len);
+  fprintf(stderr, "\tprotocol address length: %d\n", arp_hdr->ar_ip_addr_len);
   fprintf(stderr, "\topcode: %d\n", ntohs(arp_hdr->ar_op));
 
   fprintf(stderr, "\tsender hardware address: ");
-  print_addr_eth(arp_hdr->ar_sha);
+  print_addr_eth(arp_hdr->ar_src_mac);
   fprintf(stderr, "\tsender ip address: ");
-  print_addr_ip_int(ntohl(arp_hdr->ar_sip));
+  print_addr_ip_int(ntohl(arp_hdr->ar_src_ip));
 
   fprintf(stderr, "\ttarget hardware address: ");
-  print_addr_eth(arp_hdr->ar_tha);
+  print_addr_eth(arp_hdr->ar_dest_mac);
   fprintf(stderr, "\ttarget ip address: ");
-  print_addr_ip_int(ntohl(arp_hdr->ar_tip));
+  print_addr_ip_int(ntohl(arp_hdr->ar_dest_ip));
 }
 
 /* Prints out all possible headers, starting from Ethernet */
@@ -192,7 +192,7 @@ unsigned char* whats_my_mac(struct sr_instance *sr, char *interface)
 	{
 		if(strcmp(interface, list_entry->name))
 		{
-			return list_entry->addr;
+			return list_entry->mac;
 		}
 		list_entry = list_entry->next;
 	}

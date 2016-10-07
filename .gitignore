@@ -1,5 +1,7 @@
 /.cproject
 /.project
+/.settings/
+/router/*.d
 /VisualGDBCache/csc458-Debug/SourceCache.dat
 /VisualGDBCache/csc458-Debug
 /release.mak

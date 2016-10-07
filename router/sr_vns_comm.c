@@ -535,7 +535,7 @@ sr_ether_addrs_match_interface( struct sr_instance* sr, /* borrowed */
         return 0;
     }
 
-    if ( memcmp( ether_hdr->ether_shost, iface->addr, ETHER_ADDR_LEN) != 0 ){
+    if ( memcmp( ether_hdr->ether_shost, iface->mac, ETHER_ADDR_LEN) != 0 ){
         fprintf( stderr, "** Error, source address does not match interface\n");
         return 0;
     }
@@ -660,7 +660,7 @@ int  sr_arp_req_not_for_us(struct sr_instance* sr,
 
     if ( (e_hdr->ether_type == htons(ethertype_arp)) &&
             (a_hdr->ar_op      == htons(arp_op_request))   &&
-            (a_hdr->ar_tip     != iface->ip ) )
+            (a_hdr->ar_dest_ip     != iface->ip ) )
     { return 1; }
 
     return 0;

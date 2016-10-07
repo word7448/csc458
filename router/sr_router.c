@@ -62,9 +62,16 @@ void sr_init(struct sr_instance* sr)
 	/* Add initialization code here! */
 	printf("size of sr_ethernet_hdr_t %d\n", sizeof(sr_ethernet_hdr_t));
 	printf("size of sr_arp_hdr_t %d\n", sizeof(sr_arp_hdr_t));
-	printf("size of sr_ip_hdr_t %d\n", sizeof(sr_ip_hdr_t));	
+	printf("size of sr_ip_hdr_t %d\n", sizeof(sr_ip_hdr_t));
 
-
+	printf("what's in sr->routing_table ???\n");
+	struct sr_rt *table_entry = sr->routing_table;
+	while(table_entry != NULL)
+	{
+		print_addr_ip(table_entry->dest);
+		print_addr_ip(table_entry->gw);
+		table_entry = table_entry->next;
+	}
 
 } /* -- sr_init -- */
 
@@ -130,9 +137,51 @@ void sr_handlepacket(struct sr_instance* sr,
 
 /* Takes an ARP packet and deals with it */
 void handle_arp(struct sr_instance* sr, uint8_t * packet, unsigned int len, char* interface) {
-	sr_arp_hdr_t *arpheader = (packet + sizeof(sr_ethernet_hdr_t));
+	sr_arp_hdr_t *arpheader = (sr_arp_hdr_t*)(packet + sizeof(sr_ethernet_hdr_t));
 	print_hdr_arp(arpheader);
-	struct sr_arpreq *result = sr_arpcache_queuereq(&(sr->cache), arpheader->ar_tip, packet, len, interface); /*not doing anything with the result currently*/
+
+	/*assume if it's broadcasted to me, it must be for something connected to me*/
+    sr_ethernet_hdr_t *eth_hdr = (sr_ethernet_hdr_t*) packet;
+    uint8_t broadcast_mac[6] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
+    if(memcmp(eth_hdr->ether_dhost, broadcast_mac, 6) == 0)
+    {
+    	struct sr_if *interface_listing = sr->if_list;
+    	while(interface_listing != NULL)
+    	{
+    		if(interface_listing->ip == arpheader->ar_dest_ip)
+    		{
+    			/*found the target interface on the router*/
+    			int reply_size = sizeof(sr_ethernet_hdr_t) + sizeof(sr_arp_hdr_t);
+    			uint8_t *reply = malloc(reply_size);
+
+    			sr_ethernet_hdr_t *reply_eheader = (sr_ethernet_hdr_t*)reply;
+    			memcpy(reply_eheader->ether_dhost, eth_hdr->ether_shost, 6);
+    			memcpy(reply_eheader->ether_shost, interface_listing->mac, 6);
+    			reply_eheader->ether_type = ethertype_arp;
+
+    			sr_arp_hdr_t *reply_arp = reply + sizeof(sr_ethernet_hdr_t);
+    			reply_arp->ar_hardware_type = arp_hdr_ethernet;
+    			reply_arp->ar_protocol_type = arp_hdr_ip;
+    			reply_arp->ar_mac_addr_len = 6;
+    			reply_arp->ar_ip_addr_len = 4;
+    			reply_arp->ar_op = arp_op_reply;
+    			memcpy(reply_arp->ar_src_mac, interface_listing->mac, 6);
+    			reply_arp->ar_src_ip = interface_listing->ip;
+    			memcpy(reply_arp->ar_dest_mac, arpheader->ar_src_mac, 6);
+    			reply_arp->ar_dest_ip = arpheader->ar_src_ip;
+                sr_send_packet(sr, reply, reply_size, interface);
+
+    			break;
+    		}
+    		interface_listing = interface_listing->next;
+    	}
+
+    	if(interface_listing == NULL)
+    	{
+    		printf("reached the end of sr->if_list. couldn't find a match for the arp request\n");
+    	}
+    }
+	/*struct sr_arpreq *result = sr_arpcache_queuereq(&(sr->cache), arpheader->ar_tip, packet, len, interface); /*not doing anything with the result currently*/
 
 }
 
@@ -207,7 +256,7 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
                 /* Make ethernet header */
                 sr_ethernet_hdr_t *reply_eth_hdr = (sr_ethernet_hdr_t *)reply_packet;
                 memcpy(reply_eth_hdr->ether_dhost, eth_hdr->ether_shost, sizeof(sr_ethernet_hdr_t));
-                memcpy(reply_eth_hdr->ether_shost, sr_get_interface(sr, interface)->addr, sizeof(sr_ethernet_hdr_t));
+                memcpy(reply_eth_hdr->ether_shost, sr_get_interface(sr, interface)->mac, sizeof(sr_ethernet_hdr_t));
                 reply_eth_hdr->ether_type = htons(ethertype_ip);
                 
                 
@@ -229,7 +278,7 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
                 if (icmp_header->icmp_type == ICMP_ECHO_REQ) {
                     /* Make ethernet header */
                     memcpy(ethernet_header->ether_dhost, ethernet_header->ether_shost, sizeof(uint8_t)*ETHER_ADDR_LEN);
-                    memcpy(ethernet_header->ether_shost, sr_get_interface(sr, interface)->addr, sizeof(uint8_t)*ETHER_ADDR_LEN);
+                    memcpy(ethernet_header->ether_shost, sr_get_interface(sr, interface)->mac, sizeof(uint8_t)*ETHER_ADDR_LEN);
                     
                     /* Make IP header */
                     /* Now update it */

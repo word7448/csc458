@@ -112,7 +112,7 @@ void sr_set_ether_addr(struct sr_instance* sr, const unsigned char* addr)
     {if_walker = if_walker->next; }
 
     /* -- copy address -- */
-    memcpy(if_walker->addr,addr,6);
+    memcpy(if_walker->mac,addr,6);
 
 } /* -- sr_set_ether_addr -- */
 
@@ -188,7 +188,7 @@ void sr_print_if(struct sr_if* iface)
     ip_addr.s_addr = iface->ip;
 
     Debug("%s\tHWaddr",iface->name);
-    DebugMAC(iface->addr);
+    DebugMAC(iface->mac);
     Debug("\n");
     Debug("\tinet addr %s\n",inet_ntoa(ip_addr));
 } /* -- sr_print_if -- */

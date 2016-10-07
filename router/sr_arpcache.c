@@ -35,12 +35,11 @@ void sr_arpcache_sweepreqs(struct sr_instance *sr) {
 			   sr_arp_hdr_t *orig_aheader = failed_packet->buf + sizeof(sr_ip_hdr_t);
 
 			   /*DT*create icmp fail and make its internals easily accessible*/
-			   int fail_length = sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_t3_hdr_t) + 4;
+			   int fail_length = sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_t3_hdr_t);
 			   uint8_t *fail = malloc(fail_length);
 			   sr_ethernet_hdr_t *fail_eheader = fail;
 			   sr_ip_hdr_t *fail_ipheader = fail + sizeof(sr_ethernet_hdr_t);
 			   sr_icmp_t3_hdr_t*fail_icmp = fail + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t);
-			   uint32_t *fail_crc = fail + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_t3_hdr_t);
 
 			   /*DT*fill in ethernet header*/
 			   memcpy(fail_eheader->ether_dhost, orig_eheader->ether_shost, 6);
@@ -55,7 +54,7 @@ void sr_arpcache_sweepreqs(struct sr_instance *sr) {
 			   fail_ipheader->ip_ttl = 64;
 			   fail_ipheader->ip_p = ip_protocol_icmp;
 			   fail_ipheader->ip_src = whats_my_ip(sr, failed_packet->iface);
-			   fail_ipheader->ip_dst = orig_aheader->ar_sip;
+			   fail_ipheader->ip_dst = orig_aheader->ar_src_ip;
 			   /*DT* crc not filled in*/
 
 			   /*DT* fill in the icmp stuff*/

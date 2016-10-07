@@ -184,21 +184,21 @@ enum sr_arp_opcode {
 };
 
 enum sr_arp_hrd_fmt {
-  arp_hrd_ethernet = 0x0001,
+  arp_hdr_ethernet = 0x0001,
+  arp_hdr_ip = 0x0800,
 };
-
 
 struct sr_arp_hdr
 {
-    unsigned short  ar_hrd;             /* format of hardware address   */
-    unsigned short  ar_pro;             /* format of protocol address   */
-    unsigned char   ar_hln;             /* length of hardware address   */
-    unsigned char   ar_pln;             /* length of protocol address   */
+    unsigned short  ar_hardware_type;             /* format of hardware address   */
+    unsigned short  ar_protocol_type;             /* format of protocol address   */
+    unsigned char   ar_mac_addr_len;             /* length of hardware address   */
+    unsigned char   ar_ip_addr_len;             /* length of protocol address   */
     unsigned short  ar_op;              /* ARP opcode (command)         */
-    unsigned char   ar_sha[ETHER_ADDR_LEN];   /* sender hardware address      */
-    uint32_t        ar_sip;             /* sender IP address            */
-    unsigned char   ar_tha[ETHER_ADDR_LEN];   /* target hardware address      */
-    uint32_t        ar_tip;             /* target IP address            */
+    unsigned char   ar_src_mac[ETHER_ADDR_LEN];   /* sender hardware address      */
+    uint32_t        ar_src_ip;             /* sender IP address            */
+    unsigned char   ar_dest_mac[ETHER_ADDR_LEN];   /* target hardware address      */
+    uint32_t        ar_dest_ip;             /* target IP address            */
 } __attribute__ ((packed)) ;
 typedef struct sr_arp_hdr sr_arp_hdr_t;
 
