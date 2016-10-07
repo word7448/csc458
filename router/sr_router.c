@@ -153,7 +153,7 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
 	print_hdr_ip(ip_header);
 	printf("got an ip packet\n");
     
-    int check_packet = sanity_check(len, ip_header);
+    int check_packet = sanity_check(len - sizeof(sr_ethernet_hdr_t), ip_header);
     if (check_packet == 1) {
         fprintf(stderr, "Packet dropped\n");
         return;
@@ -284,22 +284,22 @@ uint32_t crc32_bitwise(const void* data, size_t length, uint32_t previousCrc32)
 	return ~crc; /* same as crc ^ 0xFFFFFFFF*/
 }
 
-
+/* Finds excuses to get rid of an IP packet */
 int sanity_check(unsigned int len, sr_ip_hdr_t *ip_header){
     
-    int minimun_length = sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t);
+    int minimun_length = sizeof(sr_ip_hdr_t);
     
+	if (len < minimun_length) {
+		fprintf(stderr, "length too short, dropping packet\n");
+		return 1;
+	}
+
     uint16_t received_checksum = ip_header->ip_sum;
     uint16_t computed_checksum = cksum(ip_header, ip_header->ip_hl * 4);
     ip_header->ip_sum = 0;
     
     if (received_checksum != computed_checksum){
         fprintf(stderr, "Checksum does not match, dropping packet\n");
-        return 1;
-    }
-    
-    if (len < minimun_length){
-        fprintf(stderr, "length too short, dropping packet\n");
         return 1;
     }
     
