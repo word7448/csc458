@@ -58,21 +58,6 @@ void sr_init(struct sr_instance* sr)
 	pthread_t thread;
 
 	pthread_create(&thread, &(sr->attr), sr_arpcache_timeout, sr);
-
-	/* Add initialization code here! */
-	printf("size of sr_ethernet_hdr_t %d\n", sizeof(sr_ethernet_hdr_t));
-	printf("size of sr_arp_hdr_t %d\n", sizeof(sr_arp_hdr_t));
-	printf("size of sr_ip_hdr_t %d\n", sizeof(sr_ip_hdr_t));
-
-	printf("what's in sr->routing_table ???\n");
-	struct sr_rt *table_entry = sr->routing_table;
-	while(table_entry != NULL)
-	{
-		print_addr_ip(table_entry->dest);
-		print_addr_ip(table_entry->gw);
-		table_entry = table_entry->next;
-	}
-
 } /* -- sr_init -- */
 
 /*---------------------------------------------------------------------
