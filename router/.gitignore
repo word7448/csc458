@@ -1,0 +1,10 @@
+/sha1.o
+/sr
+/sr_arpcache.o
+/sr_dumper.o
+/sr_if.o
+/sr_main.o
+/sr_router.o
+/sr_rt.o
+/sr_utils.o
+/sr_vns_comm.o

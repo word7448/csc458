@@ -22,7 +22,7 @@
 #include "sr_arpcache.h"
 #include "sr_utils.h"
 
- // Global
+/*Global*/
 static uint32_t* crc32Lookup;
 uint32_t crc32_bitwise(const void* data, size_t length, uint32_t previousCrc32);
 
@@ -114,10 +114,10 @@ void sr_handlepacket(struct sr_instance* sr,
 
 
 
-// Keeping methods out of the sr_handle
-// Make another file for it?
+/* Keeping methods out of the sr_handle
+ Make another file for it?*/
 
-// Takes an ARP packet and deals with it
+/* Takes an ARP packet and deals with it */
 void handle_arp(struct sr_instance* sr, uint8_t * packet, unsigned int len, char* interface) {
 	sr_arp_hdr_t *arpheader = (packet + sizeof(sr_ethernet_hdr_t));
 	print_hdr_arp(arpheader);
@@ -125,7 +125,7 @@ void handle_arp(struct sr_instance* sr, uint8_t * packet, unsigned int len, char
 
 }
 
-// Takes an IP packet and deals with it
+/* Takes an IP packet and deals with it */
 void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char* interface) {
 	sr_ip_hdr_t *ipheader = (packet + sizeof(sr_ethernet_hdr_t));
 	print_hdr_ip(ipheader);
@@ -146,5 +146,5 @@ uint32_t crc32_bitwise(const void* data, size_t length, uint32_t previousCrc32)
 		for (j = 0; j < 8; j++)
 			crc = (crc >> 1) ^ (-1 * (int)(crc & 1) & Polynomial);
 	}
-	return ~crc; // same as crc ^ 0xFFFFFFFF
+	return ~crc; /* same as crc ^ 0xFFFFFFFF*/
 }
