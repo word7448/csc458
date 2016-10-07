@@ -96,28 +96,30 @@ void sr_handlepacket(struct sr_instance* sr,
 
 	printf("*** -> Received packet of length %d \n", len);	
 	
-	/*sr_ethernet_hdr_t *header = (sr_ethernet_hdr_t*)packet;*/
 
-	print_hdr_eth(packet);
-	
-
-	uint16_t useable_type = ethertype(packet);
-
-	switch (useable_type) {
-	case ethertype_arp:
-	{
-		handle_arp(sr,packet, len, interface);
-		break;
-	}
-	case ethertype_ip:
-	{
-		handle_ip(sr, packet, len, interface);
-		break;
-	}
-	default:
-		printf("got something mysterious\n");
-
-	}
+    /* Ethernet Header */
+    sr_ethernet_hdr_t *eth_hdr = (sr_ethernet_hdr_t*) packet;
+    print_hdr_eth((uint8_t *)eth_hdr);
+    
+    
+    uint16_t ethernet_type = ethertype((uint8_t*) eth_hdr);
+    
+    
+     if (ethernet_type == ethertype_arp){
+        
+        fprintf(stdout,"ARP Packet Received\n");
+        handle_arp(sr, packet, len, interface);
+    }
+     else if (ethernet_type == ethertype_ip){
+         
+         fprintf(stdout,"IP Packet Received\n");
+         handle_ip(sr, packet, len, interface);
+     }
+    
+     else{
+         fprintf(stderr,"Unknown Packet Type Dropping Packet\n");
+         return;
+     }
 }/* end sr_ForwardPacket */
 
 
@@ -251,12 +253,14 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
     
     
             default:
-                fprintf(stdout,"Recieved unknown ICMP Message type.\n");
+                fprintf(stdout,"Recieved unknown ICMP message type.\n");
                 break;
         }
         return;
     }
     /* packet is not for router, dest somewhere else, do TTL decrement*/
+     fprintf(stdout,"Not for me will haddle later.\n");
+    return;
     
 }
 
