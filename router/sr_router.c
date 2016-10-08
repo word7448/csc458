@@ -124,70 +124,82 @@ void sr_handlepacket(struct sr_instance* sr,
 void handle_arp(struct sr_instance* sr, uint8_t * packet, unsigned int len, char* interface)
 {
 	/*easy references to the original packet internals*/
-	sr_arp_hdr_t *orig_arp = (sr_arp_hdr_t*)(packet + sizeof(sr_ethernet_hdr_t));
     sr_ethernet_hdr_t *orig_eth = (sr_ethernet_hdr_t*) packet;
-
+	sr_arp_hdr_t *orig_arp = (sr_arp_hdr_t*)(packet + sizeof(sr_ethernet_hdr_t));
 	print_hdr_arp(orig_arp);
 
 	/*assume if it's broadcasted to me, it must be for something connected to me*/
     uint8_t broadcast_mac[6] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
     if(memcmp(orig_eth->ether_dhost, broadcast_mac, 6) == 0)
     {
-    	struct sr_if *interface_listing = sr->if_list;
-    	while(interface_listing != NULL) /*loop through the if_list to find a matching gateway for the request*/
+    	uint8_t dest_mac[6] = {0, 0, 0, 0, 0, 0};
+
+    	/*check the cache first to see if the ip<--> mac mapping is already there*/
+    	struct sr_arpentry *cache_hit = sr_arpcache_lookup(&(sr->cache), orig_arp->ar_dest_ip);
+    	if(cache_hit != NULL)
     	{
-    		if(interface_listing->ip == orig_arp->ar_dest_ip)
-    		{
-    			/*found the target interface on the router*/
-    			int reply_size = sizeof(sr_ethernet_hdr_t) + sizeof(sr_arp_hdr_t);
-    			uint8_t *reply = malloc(reply_size);
-
-    			/**
-    			 * Assemble ethernet header.
-    			 * Destination is the source of the original ethernet header
-    			 * Source is the router's gateway port.
-    			 */
-    			sr_ethernet_hdr_t *reply_eheader = (sr_ethernet_hdr_t*)reply;
-    			memcpy(reply_eheader->ether_dhost, orig_eth->ether_shost, 6);
-    			memcpy(reply_eheader->ether_shost, interface_listing->mac, 6);
-    			reply_eheader->ether_type = orig_eth->ether_type;
-
-    			/**
-    			 * Assemble arp header.
-    			 * Destination is the source of the original arp header
-    			 * Source is the router's gateway port.
-    			 */
-    			sr_arp_hdr_t *reply_arp = reply + sizeof(sr_ethernet_hdr_t);
-    			reply_arp->ar_hardware_type = orig_arp->ar_hardware_type;
-    			reply_arp->ar_protocol_type = orig_arp->ar_protocol_type;
-    			reply_arp->ar_mac_addr_len = orig_arp->ar_mac_addr_len;
-    			reply_arp->ar_ip_addr_len = orig_arp->ar_ip_addr_len;
-    			reply_arp->ar_op = htons(arp_op_reply);
-    			memcpy(reply_arp->ar_src_mac, interface_listing->mac, 6);
-    			reply_arp->ar_src_ip = interface_listing->ip;
-    			memcpy(reply_arp->ar_dest_mac, orig_arp->ar_src_mac, 6);
-    			reply_arp->ar_dest_ip = orig_arp->ar_src_ip;
-
-    			/*Print what's in the reply before sending it*/
-    			printf("the reply\n");
-    			print_hdrs(reply, reply_size);
-                int result = sr_send_packet(sr, reply, reply_size, interface);
-                if(printf != 0)
-                {
-                	fprintf(stderr, "error has occurred sending the packet.");
-                }
-    			break;
-    		}
-    		interface_listing = interface_listing->next;
+    		memcpy(dest_mac, cache_hit->mac, 6);
+    		free(cache_hit);
+    	}
+    	else /*if the cache didn't have a hit then you've gotta look for the mapping*/
+    	{
+			struct sr_if *interface_listing = sr->if_list;
+			while(interface_listing != NULL) /*loop through the if_list to find a matching gateway for the request*/
+			{
+				if(interface_listing->ip == orig_arp->ar_dest_ip)
+				{
+					memcpy(dest_mac, interface_listing->mac, 6);
+					break;
+				}
+				interface_listing = interface_listing->next;
+			}
+	    	if(interface_listing == NULL)
+	    	{
+	    		printf("reached the end of sr->if_list. couldn't find a match for the arp request\n");
+	    	}
     	}
 
-    	if(interface_listing == NULL)
-    	{
-    		printf("reached the end of sr->if_list. couldn't find a match for the arp request\n");
-    	}
+		/*now that you have the mac for the ip, make a reply*/
+		int reply_size = sizeof(sr_ethernet_hdr_t) + sizeof(sr_arp_hdr_t);
+		uint8_t *reply = malloc(reply_size);
+
+		/**
+		 * Assemble ethernet header.
+		 * Destination is the source of the original ethernet header
+		 * Source is the router's gateway port.
+		 */
+		sr_ethernet_hdr_t *reply_eheader = (sr_ethernet_hdr_t*) reply;
+		memcpy(reply_eheader->ether_dhost, orig_eth->ether_shost, 6);
+		memcpy(reply_eheader->ether_shost, dest_mac, 6);
+		reply_eheader->ether_type = orig_eth->ether_type;
+
+		/**
+		 * Assemble arp header.
+		 * Destination is the source of the original arp header
+		 * Source is the router's gateway port.
+		 */
+		sr_arp_hdr_t *reply_arp = reply + sizeof(sr_ethernet_hdr_t);
+		reply_arp->ar_hardware_type = orig_arp->ar_hardware_type;
+		reply_arp->ar_protocol_type = orig_arp->ar_protocol_type;
+		reply_arp->ar_mac_addr_len = orig_arp->ar_mac_addr_len;
+		reply_arp->ar_ip_addr_len = orig_arp->ar_ip_addr_len;
+		reply_arp->ar_op = htons(arp_op_reply);
+		memcpy(reply_arp->ar_src_mac, dest_mac, 6);
+		reply_arp->ar_src_ip = orig_arp->ar_dest_ip;
+		memcpy(reply_arp->ar_dest_mac, orig_arp->ar_src_mac, 6);
+		reply_arp->ar_dest_ip = orig_arp->ar_src_ip;
+
+		/*Print what's in the reply before sending it*/
+		printf("the reply\n");
+		print_hdrs(reply, reply_size);
+
+		/*send it*/
+		int result = sr_send_packet(sr, reply, reply_size, interface);
+		if (printf != 0)
+		{
+			fprintf(stderr, "error has occurred sending the packet.");
+		}
     }
-	/*struct sr_arpreq *result = sr_arpcache_queuereq(&(sr->cache), arpheader->ar_tip, packet, len, interface); /*not doing anything with the result currently*/
-
 }
 
 /* Takes an IP packet and deals with it */

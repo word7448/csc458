@@ -33,8 +33,8 @@ void sr_arpcache_sweepreqs(struct sr_instance *sr) {
 			   /*DT*make original packet internals easily accessible*/
 			   sr_ethernet_hdr_t *orig_eheader = failed_packet->buf;
 
-			   /*get the original ip out depending on what packet type it is*/
-				sr_ip_hdr_t orig_ipheader = failed_packet->buf + sizeof(sr_ip_hdr_t);
+			   /*get the original ip header*/
+			   sr_ip_hdr_t *orig_ipheader = failed_packet->buf + sizeof(sr_ethernet_hdr_t);
 
 			   /*DT*create icmp fail and make its internals easily accessible*/
 			   int fail_length = sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_t3_hdr_t);
@@ -80,8 +80,46 @@ void sr_arpcache_sweepreqs(struct sr_instance *sr) {
 	   }
 	   else if(diff >= 1)
 	   {
+		   /*update the counters*/
 		   request->sent = now;
 		   request->times_sent++;
+
+		   /*all destination ips will be the same for an arp request since there can be only 1 ip/mac pairing*/
+		   /*just pull the destination ip from the first packet*/
+		   struct sr_packet *first_packet = request->packets;
+		   sr_ethernet_hdr_t *first_eheader = first_packet->buf;
+		   sr_ip_hdr_t *first_ipheader = first_packet->buf + sizeof(sr_ethernet_hdr_t);
+		   uint8_t mac_unknown[6] = {0, 0, 0, 0, 0, 0};
+
+		   /**
+		    * This request is actually for the first packet. While each ip packet in this arp request is for
+		    * the same destination they could all have different sources. However a source must be filled in for
+		    * the request. Therefore the response will be for the first packet in the requests. HOWEVER, the other
+		    * packets in the request will be answered by sr_handlepacket because when the ip/mac pairing is inserted
+		    * into the cache, sr_handlepacket will get the packet Q waiting for this pairing. sr_handlepacket will
+		    * then proceed to sending out all the rest of the answers.
+		    */
+		   int request_size = sizeof(sr_ethernet_hdr_t) + sizeof(sr_arp_hdr_t);
+		   uint8_t request = malloc(request_size);
+		   sr_ethernet_hdr_t *request_eheader = request;
+		   sr_arp_hdr_t *request_aheader = request + sizeof(sr_ethernet_hdr_t);
+
+		   /*copy the ethernet header*/
+		   memcpy(request_eheader, first_eheader, sizeof(sr_ethernet_hdr_t));
+
+		   /*make the arp request*/
+		   request_aheader->ar_hardware_type = htons(arp_hdr_ethernet);
+		   request_aheader->ar_protocol_type = htons(arp_hdr_ip);
+		   request_aheader->ar_mac_addr_len = 6;
+		   request_aheader->ar_ip_addr_len = 4;
+		   request_aheader->ar_op = htons(arp_op_request);
+		   memcpy(request_aheader->ar_src_mac, first_eheader->ether_shost, 6);
+		   request_aheader->ar_src_ip = first_ipheader->ip_src;
+		   memcpy(request_aheader->ar_dest_mac, mac_unknown, 6);
+		   request_aheader->ar_dest_ip = first_ipheader->ip_dst;
+
+		   /*send the arp request for the first packet from the interface it came from*/
+		   sr_send_packet(sr, request, request_size, first_packet->iface);
 	   }
 	   else
 	   {
