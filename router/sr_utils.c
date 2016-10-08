@@ -190,15 +190,15 @@ unsigned char* whats_my_mac(struct sr_instance *sr, char *interface)
 	struct sr_if *list_entry = sr->if_list;
 	while(list_entry != NULL)
 	{
-		if(strcmp(interface, list_entry->name))
+		if(strcmp(interface, list_entry->name) == 0)
 		{
 			return list_entry->mac;
 		}
 		list_entry = list_entry->next;
 	}
 
-	unsigned char idk[] = "DontKnow";
-	return idk;
+	fprintf(stderr, "could not find a MAC address for interface name %s\n", interface);
+	return NULL;
 }
 
 /*DT* Returns the ip of an interface*/
@@ -207,12 +207,13 @@ uint32_t whats_my_ip(struct sr_instance *sr, char *interface)
 	struct sr_if *list_entry = sr->if_list;
 	while(list_entry != NULL)
 	{
-		if(strcmp(interface, list_entry->name))
+		if(strcmp(interface, list_entry->name) == 0)
 		{
 			return list_entry->ip;
 		}
 		list_entry = list_entry->next;
 	}
 
+	fprintf(stderr, "could not find an IP address for interface name %s\n", interface);
 	return 0;
 }

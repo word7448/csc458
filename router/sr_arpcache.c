@@ -16,7 +16,8 @@
   checking whether we should resend an request or destroy the arp request.
   See the comments in the header file for an idea of what it should look like.
 */
-void sr_arpcache_sweepreqs(struct sr_instance *sr) { 
+void sr_arpcache_sweepreqs(struct sr_instance *sr)
+{
    struct sr_arpreq *request = sr->cache.requests;
    struct sr_arpreq *next;
    while(request != NULL)
@@ -32,8 +33,6 @@ void sr_arpcache_sweepreqs(struct sr_instance *sr) {
 		   {
 			   /*DT*make original packet internals easily accessible*/
 			   sr_ethernet_hdr_t *orig_eheader = failed_packet->buf;
-
-			   /*get the original ip header*/
 			   sr_ip_hdr_t *orig_ipheader = failed_packet->buf + sizeof(sr_ethernet_hdr_t);
 
 			   /*DT*create icmp fail and make its internals easily accessible*/
@@ -67,6 +66,7 @@ void sr_arpcache_sweepreqs(struct sr_instance *sr) {
 			   fail_icmp->icmp_code = 1;
 			   fail_icmp->unused = 0; /*DT* zero out to make sure old heap garbage doesn't screw this up */
 			   fail_icmp->next_mtu = 0; /*DT* according to wikipedia, you only fill this in for code 4*/
+			   bzero(fail_icmp->data, 28); /*zero out the data area to guarantee any unused space is zero padding*/
 			   memcpy(fail_icmp->data, fail_ipheader, sizeof(sr_ip_hdr_t));
 			   fail_icmp->icmp_sum = 0;
 			   uint16_t icmp_checksum = cksum(fail_icmp, sizeof(sr_icmp_t3_hdr_t));
@@ -106,6 +106,8 @@ void sr_arpcache_sweepreqs(struct sr_instance *sr) {
 
 		   /*copy the ethernet header*/
 		   memcpy(request_eheader, first_eheader, sizeof(sr_ethernet_hdr_t));
+		   uint8_t mac_broadcast[6] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
+		   memcpy(request_eheader->ether_dhost, mac_broadcast, 6); /*make sure it is sent to the broadcast mac*/
 
 		   /*make the arp request*/
 		   request_aheader->ar_hardware_type = htons(arp_hdr_ethernet);
