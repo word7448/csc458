@@ -34,17 +34,7 @@ void sr_arpcache_sweepreqs(struct sr_instance *sr) {
 			   sr_ethernet_hdr_t *orig_eheader = failed_packet->buf;
 
 			   /*get the original ip out depending on what packet type it is*/
-			   uint32_t orig_ip; /*in network order since it's just copied*/
-			   if(ntohs(orig_eheader->ether_type) == ethertype_ip)
-			   {
-				   sr_ip_hdr_t orig_ipheader = failed_packet->buf + sizeof(sr_ip_hdr_t);
-				   orig_ip = orig_ipheader->ip_src;
-			   }
-			   else /* ethertype_arp*/
-			   {
-				   sr_arp_hdr_t *orig_aheader = failed_packet->buf + sizeof(sr_ip_hdr_t);
-				   orig_ip = orig_aheader->ar_src_ip;
-			   }
+				sr_ip_hdr_t orig_ipheader = failed_packet->buf + sizeof(sr_ip_hdr_t);
 
 			   /*DT*create icmp fail and make its internals easily accessible*/
 			   int fail_length = sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_t3_hdr_t);
@@ -66,7 +56,7 @@ void sr_arpcache_sweepreqs(struct sr_instance *sr) {
 			   fail_ipheader->ip_ttl = 64;
 			   fail_ipheader->ip_p = ip_protocol_icmp;
 			   fail_ipheader->ip_src = whats_my_ip(sr, failed_packet->iface);
-			   fail_ipheader->ip_dst = orig_ip;
+			   fail_ipheader->ip_dst = orig_ipheader->ip_src;
 			   fail_ipheader->ip_sum = 0; /*zero out before calculating*/
 			   uint16_t ip_checksum = cksum(fail_ipheader, sizeof(sr_ip_hdr_t));
 			   fail_ipheader->ip_sum = htons(ip_checksum);
