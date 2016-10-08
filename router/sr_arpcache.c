@@ -32,7 +32,19 @@ void sr_arpcache_sweepreqs(struct sr_instance *sr) {
 		   {
 			   /*DT*make original packet internals easily accessible*/
 			   sr_ethernet_hdr_t *orig_eheader = failed_packet->buf;
-			   sr_arp_hdr_t *orig_aheader = failed_packet->buf + sizeof(sr_ip_hdr_t);
+
+			   /*get the original ip out depending on what packet type it is*/
+			   uint32_t orig_ip; /*in network order since it's just copied*/
+			   if(ntohs(orig_eheader->ether_type) == ethertype_ip)
+			   {
+				   sr_ip_hdr_t orig_ipheader = failed_packet->buf + sizeof(sr_ip_hdr_t);
+				   orig_ip = orig_ipheader->ip_src;
+			   }
+			   else /* ethertype_arp*/
+			   {
+				   sr_arp_hdr_t *orig_aheader = failed_packet->buf + sizeof(sr_ip_hdr_t);
+				   orig_ip = orig_aheader->ar_src_ip;
+			   }
 
 			   /*DT*create icmp fail and make its internals easily accessible*/
 			   int fail_length = sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_t3_hdr_t);
@@ -49,22 +61,26 @@ void sr_arpcache_sweepreqs(struct sr_instance *sr) {
 			   /*DT*fill in ip header*/
 			   fail_ipheader->ip_tos = 0;
 			   fail_ipheader->ip_len = htons(fail_length - sizeof(sr_ethernet_hdr_t)); /*DT*everything but the ethernet header*/
-			   fail_ipheader->ip_id = htons(0);
-			   fail_ipheader->ip_off = htons(0);
+			   fail_ipheader->ip_id = 0;
+			   fail_ipheader->ip_off = 0;
 			   fail_ipheader->ip_ttl = 64;
 			   fail_ipheader->ip_p = ip_protocol_icmp;
 			   fail_ipheader->ip_src = whats_my_ip(sr, failed_packet->iface);
-			   fail_ipheader->ip_dst = orig_aheader->ar_src_ip;
-			   /*DT* crc not filled in*/
+			   fail_ipheader->ip_dst = orig_ip;
+			   fail_ipheader->ip_sum = 0; /*zero out before calculating*/
+			   uint16_t ip_checksum = cksum(fail_ipheader, sizeof(sr_ip_hdr_t));
+			   fail_ipheader->ip_sum = htons(ip_checksum);
 
 			   /*DT* fill in the icmp stuff*/
 			   /*DT* wikipedia: https://en.wikipedia.org/wiki/Internet_Control_Message_Protocol */
 			   fail_icmp->icmp_type = 3;
 			   fail_icmp->icmp_code = 1;
-			   fail_icmp->unused = htons(0); /*DT* zero out to make sure old heap garbage doesn't screw this up */
-			   fail_icmp->next_mtu = htons(0); /*DT* according to wikipedia, you only fill this in for code 4*/
+			   fail_icmp->unused = 0; /*DT* zero out to make sure old heap garbage doesn't screw this up */
+			   fail_icmp->next_mtu = 0; /*DT* according to wikipedia, you only fill this in for code 4*/
 			   memcpy(fail_icmp->data, fail_ipheader, sizeof(sr_ip_hdr_t));
-			   /*DT* crc not filled in too*/
+			   fail_icmp->icmp_sum = 0;
+			   uint16_t icmp_checksum = cksum(fail_icmp, sizeof(sr_icmp_t3_hdr_t));
+			   fail_icmp->icmp_sum = htons(icmp_checksum);
 
 			   sr_send_packet(sr, fail, fail_length, failed_packet->iface);
 
