@@ -348,9 +348,11 @@ int sanity_check(unsigned int len, sr_ip_hdr_t *ip_header){
 		return 1;
 	}
 
+	
     uint16_t received_checksum = ip_header->ip_sum;
-    uint16_t computed_checksum = cksum(ip_header, ip_header->ip_hl * 4);
-    ip_header->ip_sum = 0;
+	ip_header->ip_sum = 0;
+    uint16_t computed_checksum = cksum(ip_header, len);
+    
     
     if (received_checksum != computed_checksum){
         fprintf(stderr, "Checksum does not match, dropping packet\n");
