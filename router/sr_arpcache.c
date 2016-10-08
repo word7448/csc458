@@ -44,13 +44,13 @@ void sr_arpcache_sweepreqs(struct sr_instance *sr) {
 			   /*DT*fill in ethernet header*/
 			   memcpy(fail_eheader->ether_dhost, orig_eheader->ether_shost, 6);
 			   memcpy(fail_eheader->ether_shost, whats_my_mac(sr, failed_packet->iface), 6);
-			   fail_eheader->ether_type = ethertype_ip;
+			   fail_eheader->ether_type = htons(ethertype_ip);
 
 			   /*DT*fill in ip header*/
 			   fail_ipheader->ip_tos = 0;
-			   fail_ipheader->ip_len = fail_length - sizeof(sr_ethernet_hdr_t) -4; /*DT*everything but the ethernet header*/
-			   fail_ipheader->ip_id = 0;
-			   fail_ipheader->ip_off = 0;
+			   fail_ipheader->ip_len = htons(fail_length - sizeof(sr_ethernet_hdr_t)); /*DT*everything but the ethernet header*/
+			   fail_ipheader->ip_id = htons(0);
+			   fail_ipheader->ip_off = htons(0);
 			   fail_ipheader->ip_ttl = 64;
 			   fail_ipheader->ip_p = ip_protocol_icmp;
 			   fail_ipheader->ip_src = whats_my_ip(sr, failed_packet->iface);
@@ -61,8 +61,8 @@ void sr_arpcache_sweepreqs(struct sr_instance *sr) {
 			   /*DT* wikipedia: https://en.wikipedia.org/wiki/Internet_Control_Message_Protocol */
 			   fail_icmp->icmp_type = 3;
 			   fail_icmp->icmp_code = 1;
-			   fail_icmp->unused = 0; /*DT* zero out to make sure old heap garbage doesn't screw this up */
-			   fail_icmp->next_mtu = 0; /*DT* according to wikipedia, you only fill this in for code 4*/
+			   fail_icmp->unused = htons(0); /*DT* zero out to make sure old heap garbage doesn't screw this up */
+			   fail_icmp->next_mtu = htons(0); /*DT* according to wikipedia, you only fill this in for code 4*/
 			   memcpy(fail_icmp->data, fail_ipheader, sizeof(sr_ip_hdr_t));
 			   /*DT* crc not filled in too*/
 
