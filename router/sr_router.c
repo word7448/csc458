@@ -144,11 +144,14 @@ void handle_arp(struct sr_instance* sr, uint8_t * packet, unsigned int len, char
     	else /*if the cache didn't have a hit then you've gotta look for the mapping*/
     	{
 			struct sr_if *interface_listing = sr->if_list;
+			struct sr_arpreq *backlog;
 			while(interface_listing != NULL) /*loop through the if_list to find a matching gateway for the request*/
 			{
 				if(interface_listing->ip == orig_arp->ar_dest_ip)
 				{
 					memcpy(dest_mac, interface_listing->mac, 6);
+					backlog = sr_arpcache_insert(&(sr->cache), cache_hit->mac, orig_arp->ar_dest_ip);
+					/*todo: handle the backlog of packets, now that the mac/ip pairing is known*/
 					break;
 				}
 				interface_listing = interface_listing->next;
