@@ -139,23 +139,34 @@ void handle_arp(struct sr_instance* sr, uint8_t * packet, unsigned int len, char
     			int reply_size = sizeof(sr_ethernet_hdr_t) + sizeof(sr_arp_hdr_t);
     			uint8_t *reply = malloc(reply_size);
 
+    			/**
+    			 * Assemble ethernet header. Destination is the source of the original ethernet header
+    			 * Source is the router's gateway port.
+    			 */
     			sr_ethernet_hdr_t *reply_eheader = (sr_ethernet_hdr_t*)reply;
     			memcpy(reply_eheader->ether_dhost, eth_hdr->ether_shost, 6);
     			memcpy(reply_eheader->ether_shost, interface_listing->mac, 6);
-    			reply_eheader->ether_type = ethertype_arp;
+    			reply_eheader->ether_type = eth_hdr->ether_type;
 
+    			/**
+    			 * Assemble arp header. Destination is the source of the original arp header
+    			 * Source is the router's gateway port.
+    			 */
     			sr_arp_hdr_t *reply_arp = reply + sizeof(sr_ethernet_hdr_t);
-    			reply_arp->ar_hardware_type = arp_hdr_ethernet;
-    			reply_arp->ar_protocol_type = arp_hdr_ip;
-    			reply_arp->ar_mac_addr_len = 6;
-    			reply_arp->ar_ip_addr_len = 4;
+    			reply_arp->ar_hardware_type = arpheader->ar_hardware_type;
+    			reply_arp->ar_protocol_type = arpheader->ar_protocol_type;
+    			reply_arp->ar_mac_addr_len = arpheader->ar_dest_mac;
+    			reply_arp->ar_ip_addr_len = arpheader->ar_ip_addr_len;
     			reply_arp->ar_op = arp_op_reply;
     			memcpy(reply_arp->ar_src_mac, interface_listing->mac, 6);
     			reply_arp->ar_src_ip = interface_listing->ip;
     			memcpy(reply_arp->ar_dest_mac, arpheader->ar_src_mac, 6);
     			reply_arp->ar_dest_ip = arpheader->ar_src_ip;
-                sr_send_packet(sr, reply, reply_size, interface);
 
+    			/*Print what's in the reply*/
+    			printf("the reply\n");
+    			print_hdrs(reply, reply_size);
+                int result = sr_send_packet(sr, reply, reply_size, interface);
     			break;
     		}
     		interface_listing = interface_listing->next;
