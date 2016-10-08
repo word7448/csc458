@@ -155,9 +155,9 @@ void handle_arp(struct sr_instance* sr, uint8_t * packet, unsigned int len, char
     			sr_arp_hdr_t *reply_arp = reply + sizeof(sr_ethernet_hdr_t);
     			reply_arp->ar_hardware_type = arpheader->ar_hardware_type;
     			reply_arp->ar_protocol_type = arpheader->ar_protocol_type;
-    			reply_arp->ar_mac_addr_len = arpheader->ar_dest_mac;
+    			reply_arp->ar_mac_addr_len = arpheader->ar_mac_addr_len;
     			reply_arp->ar_ip_addr_len = arpheader->ar_ip_addr_len;
-    			reply_arp->ar_op = arp_op_reply;
+    			reply_arp->ar_op = htons(arp_op_reply);
     			memcpy(reply_arp->ar_src_mac, interface_listing->mac, 6);
     			reply_arp->ar_src_ip = interface_listing->ip;
     			memcpy(reply_arp->ar_dest_mac, arpheader->ar_src_mac, 6);
