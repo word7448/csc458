@@ -151,7 +151,21 @@ void handle_arp(struct sr_instance* sr, uint8_t * packet, unsigned int len, char
 				{
 					memcpy(dest_mac, interface_listing->mac, 6);
 					backlog = sr_arpcache_insert(&(sr->cache), cache_hit->mac, orig_arp->ar_dest_ip);
-					/*todo: handle the backlog of packets, now that the mac/ip pairing is known*/
+
+					/*only proccess the backlog if there is one. otherwise backlog->packet will give a memory read exception*/
+					if(backlog != NULL)
+					{
+						/*proccess the backlog of ip packets with the already existing handle_ip*/
+						struct sr_packet *backlog_packet = backlog->packets;
+						while(backlog_packet != NULL)
+						{
+							handle_ip(sr, backlog_packet->buf, backlog_packet->len, backlog_packet->iface);
+							backlog_packet = backlog_packet->next;
+						}
+
+						/*backlog has been completed, get rid of this request*/
+						sr_arpreq_destroy(&(sr->cache), backlog);
+					}
 					break;
 				}
 				interface_listing = interface_listing->next;
