@@ -236,7 +236,7 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
 	/* Get this packet out early if the length is too short*/
 	if (len < sizeof(sr_ip_hdr_t)) { 
 		fprintf(stderr, "length too short, dropping packet\n");
-		return 1;
+		return;
 	}
 
 	print_hdr_ip(ip_header);
