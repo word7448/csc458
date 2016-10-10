@@ -258,6 +258,10 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
         }
         node = node->next;
     }
+    if(node == NULL)
+    {
+    	printf("nothing in the if_list to match the destination\n");
+    }
 
     if (sr_get_interface(sr, interface) != 0) {
         uint8_t ip_type = ip_protocol(packet + sizeof(sr_ethernet_hdr_t));
@@ -389,6 +393,6 @@ int sanity_check(sr_ip_hdr_t *ip_header) {
 		return 1;
 	}
 
-	fprintf(stdout, "Alt Sanity Checks Passed");
+	fprintf(stdout, "Alt Sanity Checks Passed\n");
 	return 0;
 }
