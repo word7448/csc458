@@ -258,12 +258,8 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
         }
         node = node->next;
     }
-    if(node == NULL)
-    {
-    	printf("nothing in the if_list to match the destination\n");
-    }
 
-    if (sr_get_interface(sr, interface) != 0) {
+    if (node != NULL) {
         uint8_t ip_type = ip_protocol(packet + sizeof(sr_ethernet_hdr_t));
         /* Get ICMP header */
         sr_icmp_hdr_t* icmp_header = (sr_icmp_hdr_t*)(packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
@@ -352,7 +348,7 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
         return;
     }
     /* packet is not for router, dest somewhere else, do TTL decrement*/
-     fprintf(stdout,"Not for me will haddle later.\n");
+     fprintf(stdout,"nothing in the if_list to match the destination, packet not for me.\n");
     return;
     
 }
