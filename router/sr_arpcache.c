@@ -24,7 +24,7 @@ void sr_arpcache_sweepreqs(struct sr_instance *sr)
    {
 	   next = request->next; /*DT*save the next right away just in case the request disappears because it was too many times*/
 	   time_t now = time(NULL); /*DT* in seconds since new years 1970*/
-	   time_t diff = now = request->sent;
+	   time_t diff = now - request->sent; /*OH* supposed to be "now -" not "now =" right? /
 
 	   if(request->times_sent >= 5)
 	   {
@@ -105,7 +105,7 @@ void sr_arpcache_sweepreqs(struct sr_instance *sr)
 		   sr_arp_hdr_t *request_aheader = request + sizeof(sr_ethernet_hdr_t);
 
 		   /*copy the ethernet header*/
-		   memcpy(request_eheader, first_eheader, sizeof(sr_ethernet_hdr_t));
+		   memcpy(request_eheader, first_eheader, sizeof(sr_ethernet_hdr_t)); /*OH* Segfault*/
 		   uint8_t mac_broadcast[6] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
 		   memcpy(request_eheader->ether_dhost, mac_broadcast, 6); /*make sure it is sent to the broadcast mac*/
 
@@ -342,7 +342,7 @@ void *sr_arpcache_timeout(void *sr_ptr) {
         time_t curtime = time(NULL);
         
         int i;    
-        for (i = 0; i < SR_ARPCACHE_SZ; i++) {
+        for (i = 0; i < SR_ARPCACHE_SZ; i++) { /*OH* This is effectively a count to 100 when there's nothing to process*/
             if ((cache->entries[i].valid) && (difftime(curtime,cache->entries[i].added) > SR_ARPCACHE_TO)) {
                 cache->entries[i].valid = 0;
             }

@@ -251,9 +251,9 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
     /* get packet interface*/
     struct sr_if *node = 0;
     node = sr->if_list;
-	/*sr_print_if_list(node); /*This part fails hard*/
+	/*sr_print_if_list(node); /*OH* This part fails hard*/
     while(node){
-        if(node->ip == ip_header->ip_dst){ /* What's going on here? Are you trying to figure out if it's sending the packet to itself? */
+        if(node->ip == ip_header->ip_dst){ /*OH* What's going on here? Are you trying to figure out if it's sending the packet to itself? */
             printf("\n");
             printf("\n");
             printf("\n");
