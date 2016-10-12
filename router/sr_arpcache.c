@@ -99,13 +99,13 @@ void sr_arpcache_sweepreqs(struct sr_instance *sr)
 		    * into the cache, sr_handlepacket will get the packet Q waiting for this pairing. sr_handlepacket will
 		    * then proceed to sending out all the rest of the answers.
 		    */
-		   int request_size = sizeof(sr_ethernet_hdr_t) + sizeof(sr_arp_hdr_t);
-		   uint8_t request = malloc(request_size);
-		   sr_ethernet_hdr_t *request_eheader = request;
-		   sr_arp_hdr_t *request_aheader = request + sizeof(sr_ethernet_hdr_t);
+		   int arp_request_size = sizeof(sr_ethernet_hdr_t) + sizeof(sr_arp_hdr_t);
+		   uint8_t *arp_request = malloc(arp_request_size);
+		   sr_ethernet_hdr_t *request_eheader = arp_request;
+		   sr_arp_hdr_t *request_aheader = arp_request + sizeof(sr_ethernet_hdr_t);
 
 		   /*copy the ethernet header*/
-		   memcpy(request_eheader, first_eheader, sizeof(sr_ethernet_hdr_t)); /*OH* Segfault*/
+		   memcpy(request_eheader, first_eheader, sizeof(sr_ethernet_hdr_t));
 		   uint8_t mac_broadcast[6] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
 		   memcpy(request_eheader->ether_dhost, mac_broadcast, 6); /*make sure it is sent to the broadcast mac*/
 
@@ -121,7 +121,7 @@ void sr_arpcache_sweepreqs(struct sr_instance *sr)
 		   request_aheader->ar_dest_ip = first_ipheader->ip_dst;
 
 		   /*send the arp request for the first packet from the interface it came from*/
-		   sr_send_packet(sr, request, request_size, first_packet->iface);
+		   sr_send_packet(sr, arp_request, arp_request_size, first_packet->iface);
 	   }
 	   else
 	   {
