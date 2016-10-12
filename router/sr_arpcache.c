@@ -24,7 +24,7 @@ void sr_arpcache_sweepreqs(struct sr_instance *sr)
    {
 	   next = request->next; /*DT*save the next right away just in case the request disappears because it was too many times*/
 	   time_t now = time(NULL); /*DT* in seconds since new years 1970*/
-	   time_t diff = now - request->sent; /*OH* supposed to be "now -" not "now =" right? /
+	   time_t diff = now - request->sent; /*OH* supposed to be "now -" not "now =" right? */
 
 	   if(request->times_sent >= 5)
 	   {
