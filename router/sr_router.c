@@ -251,20 +251,9 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
     /* get packet interface*/
     struct sr_if *node = 0;
     node = sr->if_list;
-    
+	/*sr_print_if_list(node); /*OH* This part fails hard*/
     while(node){
         if(node->ip == ip_header->ip_dst){
-            fprintf(stdout,"\n");
-            fprintf(stdout,"\n");
-            fprintf(stdout,"\n");
-            fprintf(stdout,"\n");
-            fprintf("node %" PRIu32 "\n",node->ip);
-            fprintf("dst %" PRIu32 "\n",ip_header->ip_dst);
-            
-            fprintf(stdout,"\n");
-            fprintf(stdout,"\n");
-            fprintf(stdout,"\n");
-            fprintf(stdout,"\n");
             break;
         }
         node = node->next;
@@ -430,7 +419,7 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
         return;
     }
     /* packet is not for router, dest somewhere else, do TTL decrement*/
-     fprintf(stdout,"nothing in the if_list to match the destination, packet not for me.\n");
+     fprintf(stdout,"nothing in the if_list to match the destination, packet not for me.\n"); /* Node is recognized as null everytime, packets go nowhere */
     return;
     
 }
