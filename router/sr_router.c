@@ -308,13 +308,13 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
         response_icmp_header->icmp_sum = cksum(response_icmp_header, sizeof(sr_icmp_hdr_t));
 
         
-        if (sr_arpcache_lookup(&sr->cache,response_ip_header->ip_dst)) {
-            fprintf(stdout,"IP Dest exists in ARP Cache, Sending ICMP ECHO");
+        if ((sr_arpcache_lookup(&sr->cache,response_ip_header->ip_dst)) != NULL) {
+            fprintf(stdout,"IP Dest exists in ARP Cache, Sending ICMP ECHO \n");
             sr_send_packet(sr, reply_packet, len, interface);
            
         }
         else{
-        fprintf(stdout,"IP Dest doesn't exists in ARP Cache");
+        fprintf(stdout,"IP Dest doesn't exists in ARP Cache \n");
         sr_arpcache_queuereq(&sr->cache,response_ip_header->ip_dst, reply_packet, size, interface);
         }
         return;
@@ -397,15 +397,54 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
                     icmp_header->icmp_sum = 0;
                     icmp_header->icmp_sum = cksum(icmp_header, len-sizeof(sr_ethernet_hdr_t)-sizeof(sr_ip_hdr_t));
                     
-                    if (sr_arpcache_lookup(&sr->cache,ip_header->ip_dst)) {
-                        fprintf(stdout,"IP Dest exists in ARP Cache, Sending ICMP ECHO");
-                        sr_send_packet(sr, packet, len, interface);
+                    
+                    int size = sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_hdr_t);
+                    uint8_t *reply_packet = malloc(size);
+                    
+                    sr_ethernet_hdr_t *eth_hdr = malloc(sizeof(sr_ethernet_hdr_t));
+                    memcpy(eth_hdr, (sr_ethernet_hdr_t *) packet, sizeof(sr_ethernet_hdr_t));
+                    
+                    /* Ethernet header */
+                    sr_ethernet_hdr_t *response_ethernet_header = (sr_ethernet_hdr_t *)reply_packet;
+                    memcpy(response_ethernet_header->ether_dhost, eth_hdr->ether_shost, sizeof(sr_ethernet_hdr_t));
+                    memcpy(response_ethernet_header->ether_shost, sr_get_interface(sr, interface)->mac, sizeof(sr_ethernet_hdr_t));
+                    response_ethernet_header->ether_type = htons(ethertype_ip);
+                    
+                    
+                    /* IP header */
+                    sr_ip_hdr_t *response_ip_header = (sr_ip_hdr_t *)(reply_packet + sizeof(sr_ethernet_hdr_t));
+                    
+                    response_ip_header->ip_dst = ip_header->ip_src;
+                    response_ip_header->ip_p = ip_protocol_icmp;
+                    response_ip_header->ip_ttl = 255;
+                    response_ip_header->ip_tos = 0;
+                    response_ip_header->ip_v = 4;
+                    response_ip_header->ip_hl = sizeof(sr_ip_hdr_t)/4;
+                    response_ip_header->ip_len = htons(sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_hdr_t));
+                    response_ip_header->ip_id = htons(0);
+                    response_ip_header->ip_off = htons(IP_DF);
+                    response_ip_header->ip_src = sr_get_interface(sr, interface)->ip;
+                    response_ip_header->ip_sum = 0;
+                    response_ip_header->ip_sum = cksum(response_ip_header, sizeof(sr_ip_hdr_t));
+                    
+                    /* ICMP Header */
+                    sr_icmp_hdr_t *response_icmp_header = (sr_icmp_hdr_t *)(reply_packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
+                    response_icmp_header->icmp_type = ICMP_ECHO_REPLY;
+                    response_icmp_header->icmp_code = 0;
+                    response_icmp_header->icmp_sum = 0;
+                    response_icmp_header->icmp_sum = cksum(response_icmp_header, sizeof(sr_icmp_hdr_t));
+                    
+                    
+                    if ((sr_arpcache_lookup(&sr->cache,response_ip_header->ip_dst)) != NULL) {
+                        fprintf(stdout,"IP Dest exists in ARP Cache, Sending ICMP ECHO \n");
+                        sr_send_packet(sr, reply_packet, len, interface);
                         
                     }
                     else{
-                    fprintf(stdout,"IP Dest doesn't exists in ARP Cache");
-                    sr_arpcache_queuereq(&sr->cache, ip_header->ip_dst, packet, len, interface);
+                        fprintf(stdout,"IP Dest doesn't exists in ARP Cache \n");
+                        sr_arpcache_queuereq(&sr->cache,response_ip_header->ip_dst, reply_packet, size, interface);
                     }
+
                 }
                 break;
     
@@ -414,6 +453,7 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
                 fprintf(stdout,"Recieved unknown ICMP message type.\n");
                 break;
         }
+        return;
     }
     /* packet is not for router, dest somewhere else, do TTL decrement*/
      fprintf(stdout,"nothing in the if_list to match the destination, packet not for me.\n");
