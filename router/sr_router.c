@@ -258,6 +258,68 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
         }
         node = node->next;
     }
+    
+    
+    
+    /* Decrement TTL */
+    if (ip_header->ip_ttl > 0){
+        ip_header->ip_ttl = ip_header->ip_ttl - 1;
+        ip_header->ip_sum = 0;
+        ip_header->ip_sum = cksum(ip_header, ip_header->ip_hl * 4);
+        
+
+    } else {
+
+        int size = sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_hdr_t);
+        uint8_t *reply_packet = malloc(size);
+        
+        sr_ethernet_hdr_t *eth_hdr = malloc(sizeof(sr_ethernet_hdr_t));
+        memcpy(eth_hdr, (sr_ethernet_hdr_t *) packet, sizeof(sr_ethernet_hdr_t));
+        
+        /* Ethernet header */
+        sr_ethernet_hdr_t *response_ethernet_header = (sr_ethernet_hdr_t *)reply_packet;
+        memcpy(response_ethernet_header->ether_dhost, eth_hdr->ether_shost, sizeof(sr_ethernet_hdr_t));
+        memcpy(response_ethernet_header->ether_shost, sr_get_interface(sr, interface)->mac, sizeof(sr_ethernet_hdr_t));
+        response_ethernet_header->ether_type = htons(ethertype_ip);
+        
+        
+        /* IP header */
+        sr_ip_hdr_t *response_ip_header = (sr_ip_hdr_t *)(reply_packet + sizeof(sr_ethernet_hdr_t));
+        
+        response_ip_header->ip_dst = ip_header->ip_src;
+        response_ip_header->ip_p = ip_protocol_icmp;
+        response_ip_header->ip_ttl = 255;
+        response_ip_header->ip_tos = 0;
+        response_ip_header->ip_v = 4;
+        response_ip_header->ip_hl = sizeof(sr_ip_hdr_t)/4;
+        response_ip_header->ip_len = htons(sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_hdr_t));
+        response_ip_header->ip_id = htons(0);
+        response_ip_header->ip_off = htons(IP_DF);
+        response_ip_header->ip_src = sr_get_interface(sr, interface)->ip;
+        response_ip_header->ip_sum = 0;
+        response_ip_header->ip_sum = cksum(response_ip_header, sizeof(sr_ip_hdr_t));
+        
+        /* ICMP Header */
+        sr_icmp_hdr_t *response_icmp_header = (sr_icmp_hdr_t *)(reply_packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
+        response_icmp_header->icmp_type = ICMP_TIME_EXCEEDED;
+        response_icmp_header->icmp_code = 0;
+        memcpy(response_icmp_header->data, response_ip_header, ICMP_DATA_SIZE);
+        response_icmp_header->icmp_sum = 0;
+        response_icmp_header->icmp_sum = cksum(response_icmp_header, sizeof(sr_icmp_hdr_t));
+
+        
+        if (sr_arpcache_lookup(&sr->cache,response_ip_header->ip_dst)) {
+            fprintf(stdout,"IP Dest exists in ARP Cache, Sending ICMP ECHO");
+            sr_send_packet(sr, reply_packet, len, interface);
+           
+        }
+        else{
+        fprintf(stdout,"IP Dest doesn't exists in ARP Cache");
+        sr_arpcache_queuereq(&sr->cache,response_ip_header->ip_dst, reply_packet, size, interface);
+        }
+        return;
+    }
+
 
     if (node != NULL) {
         uint8_t ip_type = ip_protocol(packet + sizeof(sr_ethernet_hdr_t));
@@ -309,24 +371,24 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
                 reply_icmp_hdr->icmp_sum = 0;
                 memcpy(reply_icmp_hdr->data, ip_header, ICMP_DATA_SIZE);
                 reply_icmp_hdr->icmp_sum = cksum(reply_icmp_hdr, sizeof(sr_icmp_t3_hdr_t));
-                sr_send_packet(sr, reply_packet, len, interface);
+                sr_send_packet(sr, reply_packet, size, interface);
+                
                 
                 break;
                 
             case ip_protocol_icmp:
                 
                 if (icmp_header->icmp_type == ICMP_ECHO_REQ) {
-                    /* Make ethernet header */
+                    /* Make ethernet header. considering factoring out this entire segment into an IMCP helper considering its all boiler plate */
                     memcpy(ethernet_header->ether_dhost, ethernet_header->ether_shost, sizeof(uint8_t)*ETHER_ADDR_LEN);
                     memcpy(ethernet_header->ether_shost, sr_get_interface(sr, interface)->mac, sizeof(uint8_t)*ETHER_ADDR_LEN);
                     
                     /* Make IP header */
-                    /* Now update it */
-                    uint32_t new_dest = ip_header->ip_src;
+                    ip_header->ip_sum = 0;
                     ip_header->ip_sum = cksum(ip_header, sizeof(sr_ip_hdr_t));
                     ip_header->ip_src = ip_header->ip_dst;
+                    uint32_t new_dest = ip_header->ip_src;
                     ip_header->ip_dst = new_dest;
-                    ip_header->ip_sum = 0;
 
                     
                     /* Make ICMP Header */
@@ -334,9 +396,16 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
                     icmp_header->icmp_code = 0;
                     icmp_header->icmp_sum = 0;
                     icmp_header->icmp_sum = cksum(icmp_header, len-sizeof(sr_ethernet_hdr_t)-sizeof(sr_ip_hdr_t));
-                    print_hdrs(packet, len);
-                    sr_send_packet(sr, packet, len, interface);
                     
+                    if (sr_arpcache_lookup(&sr->cache,ip_header->ip_dst)) {
+                        fprintf(stdout,"IP Dest exists in ARP Cache, Sending ICMP ECHO");
+                        sr_send_packet(sr, packet, len, interface);
+                        
+                    }
+                    else{
+                    fprintf(stdout,"IP Dest doesn't exists in ARP Cache");
+                    sr_arpcache_queuereq(&sr->cache, ip_header->ip_dst, packet, len, interface);
+                    }
                 }
                 break;
     
@@ -345,7 +414,6 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
                 fprintf(stdout,"Recieved unknown ICMP message type.\n");
                 break;
         }
-        return;
     }
     /* packet is not for router, dest somewhere else, do TTL decrement*/
      fprintf(stdout,"nothing in the if_list to match the destination, packet not for me.\n");
