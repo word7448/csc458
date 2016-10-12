@@ -254,6 +254,17 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
     
     while(node){
         if(node->ip == ip_header->ip_dst){
+            printf("\n");
+            printf("\n");
+            printf("\n");
+            printf("\n");
+            printf("node %" PRIu32 "\n",node->ip);
+            printf("dst %" PRIu32 "\n",ip_header->ip_dst);
+            
+            printf("\n");
+            printf("\n");
+            printf("\n");
+            printf("\n");
             break;
         }
         node = node->next;
