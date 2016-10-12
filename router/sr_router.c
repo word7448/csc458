@@ -306,10 +306,10 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
         memcpy(response_icmp_header->data, response_ip_header, ICMP_DATA_SIZE);
         response_icmp_header->icmp_sum = 0;
         response_icmp_header->icmp_sum = cksum(response_icmp_header, sizeof(sr_icmp_hdr_t));
-
         
-        if ((sr_arpcache_lookup(&sr->cache,response_ip_header->ip_dst)) != NULL) {
-            fprintf(stdout,"IP Dest exists in ARP Cache, Sending ICMP ECHO \n");
+
+        struct sr_arpentry *exists = sr_arpcache_lookup(&sr->cache,response_ip_header->ip_dst);
+        if (exists != NULL) {            fprintf(stdout,"IP Dest exists in ARP Cache, Sending ICMP ECHO \n");
             sr_send_packet(sr, reply_packet, len, interface);
            
         }
@@ -434,8 +434,8 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
                     response_icmp_header->icmp_sum = 0;
                     response_icmp_header->icmp_sum = cksum(response_icmp_header, sizeof(sr_icmp_hdr_t));
                     
-                    
-                    if ((sr_arpcache_lookup(&sr->cache,response_ip_header->ip_dst)) != NULL) {
+                    struct sr_arpentry *exists = sr_arpcache_lookup(&sr->cache,response_ip_header->ip_dst);
+                    if (exists != NULL) {
                         fprintf(stdout,"IP Dest exists in ARP Cache, Sending ICMP ECHO \n");
                         sr_send_packet(sr, reply_packet, len, interface);
                         
