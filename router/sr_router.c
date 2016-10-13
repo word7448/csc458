@@ -30,7 +30,6 @@
 static uint32_t* crc32Lookup;
 void handle_arp(struct sr_instance* sr, uint8_t * packet, unsigned int len, char* interface);
 void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char* interface);
-uint32_t crc32_bitwise(const void* data, size_t length, uint32_t previousCrc32);
 int sanity_check(sr_ip_hdr_t *ipheader);
 void handle_arp(struct sr_instance* sr, uint8_t * packet, unsigned int len, char* interface);
 void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char* interface);
@@ -424,26 +423,6 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
     
 }
 
-
-
-const uint32_t Polynomial = 0xEDB88320;
-
-uint32_t crc32_bitwise(const void* data, size_t length, uint32_t previousCrc32)
-{
-
-	uint32_t crc = ~previousCrc32;
-	unsigned char* current = (unsigned char*)data;
-	while (length--)
-	{
-		crc ^= *current++;
-		unsigned int j;
-		for (j = 0; j < 8; j++)
-			crc = (crc >> 1) ^ (-1 * (int)(crc & 1) & Polynomial);
-	}
-
-	return ~crc; /* same as crc ^ 0xFFFFFFFF*/
-}
-
 /* Finds excuses to get rid of an IP packet */
 int sanity_check(sr_ip_hdr_t *ip_header) {
 
@@ -456,10 +435,10 @@ int sanity_check(sr_ip_hdr_t *ip_header) {
 
 
 	if (received_checksum != computed_checksum) {
-		fprintf(stderr, "Alt checksum does not match, dropping packet\n");
+		fprintf(stderr, "checksum does not match, dropping packet\n");
 		return 1;
 	}
 
-	fprintf(stdout, "Alt Sanity Checks Passed\n");
+	fprintf(stdout, "Sanity Checks Passed\n");
 	return 0;
 }
