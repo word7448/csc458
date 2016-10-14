@@ -128,8 +128,7 @@ void handle_arp(struct sr_instance* sr, uint8_t * packet, unsigned int len, char
 	print_hdr_arp(orig_arp);
 
 	/*assume if it's broadcasted to me, it must be for something connected to me*/
-    uint8_t broadcast_mac[6] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
-    if(memcmp(orig_eth->ether_dhost, broadcast_mac, 6) == 0)
+    if(ntohs(orig_arp->ar_op) == arp_op_request)
     {
     	uint8_t dest_mac[6] = {0, 0, 0, 0, 0, 0};
 

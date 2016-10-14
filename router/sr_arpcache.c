@@ -73,7 +73,7 @@ void sr_arpcache_sweepreqs(struct sr_instance *sr)
 			   fail_icmp->icmp_sum = htons(icmp_checksum);
 
 			   sr_send_packet(sr, fail, fail_length, failed_packet->iface);
-
+			   free(fail);
 			   failed_packet = failed_packet->next;
 		   }
 		   sr_arpreq_destroy(sr, request); /*DT* this request is hopeless. failures have been sent. get rid of it*/
@@ -108,6 +108,7 @@ void sr_arpcache_sweepreqs(struct sr_instance *sr)
 		   memcpy(request_eheader, first_eheader, sizeof(sr_ethernet_hdr_t));
 		   uint8_t mac_broadcast[6] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
 		   memcpy(request_eheader->ether_dhost, mac_broadcast, 6); /*make sure it is sent to the broadcast mac*/
+		   request_eheader->ether_type = htons(ethertype_arp);
 
 		   /*make the arp request*/
 		   request_aheader->ar_hardware_type = htons(arp_hdr_ethernet);
@@ -120,8 +121,12 @@ void sr_arpcache_sweepreqs(struct sr_instance *sr)
 		   memcpy(request_aheader->ar_dest_mac, mac_unknown, 6);
 		   request_aheader->ar_dest_ip = first_ipheader->ip_dst;
 
+		   printf("sweepreqs request headers\n");
+		   print_hdrs(arp_request, arp_request_size);
+
 		   /*send the arp request for the first packet from the interface it came from*/
 		   sr_send_packet(sr, arp_request, arp_request_size, first_packet->iface);
+		   free(arp_request);
 	   }
 	   else
 	   {
