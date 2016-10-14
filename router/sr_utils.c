@@ -239,3 +239,19 @@ uint32_t whats_my_ip(struct sr_instance *sr, char *interface)
 	fprintf(stderr, "could not find an IP address for interface name %s\n", interface);
 	return 0;
 }
+
+char* ever_pointer(struct sr_instance *sr, char *interface)
+{
+	struct sr_if *list_entry = sr->if_list;
+	while(list_entry != NULL)
+	{
+		if(strcmp(interface, list_entry->name) == 0)
+		{
+			return list_entry->name;
+		}
+		list_entry = list_entry->next;
+	}
+
+	fprintf(stderr, "interface %s doesn't exist\n", interface);
+	return NULL;
+}

@@ -116,57 +116,115 @@ void sr_handlepacket(struct sr_instance* sr,
  Make another file for it?*/
 
 /* Takes an ARP packet and deals with it */
-void handle_arp(struct sr_instance* sr, uint8_t * packet, unsigned int len, char* interface)
+void handle_arp(struct sr_instance* sr, uint8_t * incoming_packet, unsigned int incoming_len, char* incoming_interface)
 {
-	/*easy references to the original packet internals*/
-    sr_ethernet_hdr_t *orig_eth = (sr_ethernet_hdr_t*) packet;
-	sr_arp_hdr_t *orig_arp = (sr_arp_hdr_t*)(packet + sizeof(sr_ethernet_hdr_t));
-	print_hdr_arp(orig_arp);
+	/*easy references to the incoming packet internals*/
+    sr_ethernet_hdr_t *incoming_eth = (sr_ethernet_hdr_t*) incoming_packet;
+	sr_arp_hdr_t *incoming_arp = (sr_arp_hdr_t*)(incoming_packet + sizeof(sr_ethernet_hdr_t));
+	print_hdr_arp(incoming_arp);
 
 	/*assume if it's broadcasted to me, it must be for something connected to me*/
-    if(ntohs(orig_arp->ar_op) == arp_op_request)
+    if(ntohs(incoming_arp->ar_op) == arp_op_request)
     {
+    	printf("got an incoming arp request\n");
     	uint8_t dest_mac[6] = {0, 0, 0, 0, 0, 0};
 
     	/*check the cache first to see if the ip<--> mac mapping is already there*/
-    	struct sr_arpentry *cache_hit = sr_arpcache_lookup(&(sr->cache), orig_arp->ar_dest_ip);
+    	struct sr_arpentry *cache_hit = sr_arpcache_lookup(&(sr->cache), incoming_arp->ar_dest_ip);
     	if(cache_hit != NULL)
     	{
+    		printf("cache hit\n");
     		memcpy(dest_mac, cache_hit->mac, 6);
     		free(cache_hit);
     	}
     	else /*if the cache didn't have a hit then you've gotta look for the mapping*/
     	{
 			struct sr_if *interface_listing = sr->if_list;
-			struct sr_arpreq *backlog;
+			struct sr_arpreq *arp_request_backlog;
 			while(interface_listing != NULL) /*loop through the if_list to find a matching gateway for the request*/
 			{
-				if(interface_listing->ip == orig_arp->ar_dest_ip)
+				if(interface_listing->ip == incoming_arp->ar_dest_ip)
 				{
+					printf("packet destined for the router itself\n");
 					memcpy(dest_mac, interface_listing->mac, 6);
-					backlog = sr_arpcache_insert(&(sr->cache), dest_mac, orig_arp->ar_dest_ip);
+					arp_request_backlog = sr_arpcache_insert(&(sr->cache), dest_mac, incoming_arp->ar_dest_ip);
 
-					/*only proccess the backlog if there is one. otherwise backlog->packet will give a memory read exception*/
-					if(backlog != NULL)
+					/*only process the backlog if there is one. otherwise backlog->packet will give a memory read exception*/
+					if(arp_request_backlog != NULL)
 					{
-						/*proccess the backlog of ip packets with the already existing handle_ip*/
-						struct sr_packet *backlog_packet = backlog->packets;
-						while(backlog_packet != NULL)
+						/*process the backlog of packets based on its type*/
+						struct sr_packet *backlog_packet = arp_request_backlog->packets;
+						while (backlog_packet != NULL)
 						{
-							handle_ip(sr, backlog_packet->buf, backlog_packet->len, backlog_packet->iface);
+							sr_ethernet_hdr_t *backlog_eheader = backlog_packet->buf;
+							if (ntohs(backlog_eheader->ether_type == ethertype_ip))
+							{
+								handle_arp(sr, backlog_packet->buf, backlog_packet->len, backlog_packet->iface);
+							}
+							else /*if(ntohs(orig_eheader->ether_type = ethertype_arp))*/
+							{
+								handle_ip(sr, backlog_packet->buf, backlog_packet->len, backlog_packet->iface);
+							}
 							backlog_packet = backlog_packet->next;
 						}
 
 						/*backlog has been completed, get rid of this request*/
-						sr_arpreq_destroy(&(sr->cache), backlog);
+						sr_arpreq_destroy(&(sr->cache), arp_request_backlog);
 					}
 					break;
 				}
 				interface_listing = interface_listing->next;
 			}
+
+			/*ip not one of the router's interfaces. broadcast in hopes a client answers*/
 	    	if(interface_listing == NULL)
 	    	{
-	    		printf("reached the end of sr->if_list. couldn't find a match for the arp request\n");
+	    		printf("arp request not for router interface, broadcasting\n");
+
+	    		/*loop through the if_list... AGAIN!!! to spam all clients*/
+	    		interface_listing = sr->if_list;
+	    		while(interface_listing != NULL)
+	    		{
+	    			/*don't send a broadcast back on the interface that sent this request*/
+	    			uint8_t mac_unknown[6] = {0, 0, 0, 0, 0, 0};
+	    			if(strcmp(incoming_interface, interface_listing->name) != 0)
+					{
+	    				/*copy and paste of arp request assembly from sweepreqs*/
+						int arp_broadcast_size = sizeof(sr_ethernet_hdr_t) + sizeof(sr_arp_hdr_t);
+						uint8_t *arp_broadcast = malloc(arp_broadcast_size);
+						sr_ethernet_hdr_t *request_eheader = arp_broadcast;
+						sr_arp_hdr_t *request_aheader = arp_broadcast + sizeof(sr_ethernet_hdr_t);
+
+						/*copy the ethernet header*/
+						memcpy(request_eheader->ether_shost, whats_my_mac(sr, incoming_interface), 6);
+						uint8_t mac_broadcast[6] = { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
+						memcpy(request_eheader->ether_dhost, mac_broadcast, 6); /*make sure it is sent to the broadcast mac*/
+						request_eheader->ether_type = htons(ethertype_arp);
+
+						/*make the arp header*/
+						request_aheader->ar_hardware_type = htons(arp_hdr_ethernet);
+						request_aheader->ar_protocol_type = htons(arp_hdr_ip);
+						request_aheader->ar_mac_addr_len = 6;
+						request_aheader->ar_ip_addr_len = 4;
+						request_aheader->ar_op = htons(arp_op_request);
+						memcpy(request_aheader->ar_src_mac, whats_my_mac(sr, incoming_interface), 6);
+						request_aheader->ar_src_ip = whats_my_ip(sr, incoming_interface);
+						memcpy(request_aheader->ar_dest_mac, mac_unknown, 6);
+						request_aheader->ar_dest_ip = incoming_arp->ar_dest_ip;
+
+						printf("broadcast request header for interface %s\n", incoming_interface);
+						print_hdrs(arp_broadcast, arp_broadcast_size);
+
+						/*send the arp broadcast for the first packet from the interface it came from*/
+						sr_send_packet(sr, arp_broadcast, arp_broadcast_size, interface_listing);
+						free(arp_broadcast);
+					}
+	    			interface_listing = interface_listing->next;
+	    		}
+
+	    		/*after the spam has been sent out, Q the request*/
+	            sr_arpcache_queuereq(&sr->cache, incoming_arp->ar_dest_ip, incoming_packet, incoming_len, incoming_interface);
+
 	    	}
     	}
 
@@ -174,41 +232,64 @@ void handle_arp(struct sr_instance* sr, uint8_t * packet, unsigned int len, char
 		int reply_size = sizeof(sr_ethernet_hdr_t) + sizeof(sr_arp_hdr_t);
 		uint8_t *reply = malloc(reply_size);
 
-		/**
-		 * Assemble ethernet header.
-		 * Destination is the source of the original ethernet header
-		 * Source is the router's gateway port.
-		 */
+		/*Assemble ethernet header.*/
 		sr_ethernet_hdr_t *reply_eheader = (sr_ethernet_hdr_t*) reply;
-		memcpy(reply_eheader->ether_dhost, orig_eth->ether_shost, 6);
+		memcpy(reply_eheader->ether_dhost, incoming_eth->ether_shost, 6);
 		memcpy(reply_eheader->ether_shost, dest_mac, 6);
-		reply_eheader->ether_type = orig_eth->ether_type;
+		reply_eheader->ether_type = incoming_eth->ether_type;
 
-		/**
-		 * Assemble arp header.
-		 * Destination is the source of the original arp header
-		 * Source is the router's gateway port.
-		 */
+		/* Assemble arp header*/
 		sr_arp_hdr_t *reply_arp = reply + sizeof(sr_ethernet_hdr_t);
-		reply_arp->ar_hardware_type = orig_arp->ar_hardware_type;
-		reply_arp->ar_protocol_type = orig_arp->ar_protocol_type;
-		reply_arp->ar_mac_addr_len = orig_arp->ar_mac_addr_len;
-		reply_arp->ar_ip_addr_len = orig_arp->ar_ip_addr_len;
+		reply_arp->ar_hardware_type = incoming_arp->ar_hardware_type;
+		reply_arp->ar_protocol_type = incoming_arp->ar_protocol_type;
+		reply_arp->ar_mac_addr_len = incoming_arp->ar_mac_addr_len;
+		reply_arp->ar_ip_addr_len = incoming_arp->ar_ip_addr_len;
 		reply_arp->ar_op = htons(arp_op_reply);
 		memcpy(reply_arp->ar_src_mac, dest_mac, 6);
-		reply_arp->ar_src_ip = orig_arp->ar_dest_ip;
-		memcpy(reply_arp->ar_dest_mac, orig_arp->ar_src_mac, 6);
-		reply_arp->ar_dest_ip = orig_arp->ar_src_ip;
+		reply_arp->ar_src_ip = incoming_arp->ar_dest_ip;
+		memcpy(reply_arp->ar_dest_mac, incoming_arp->ar_src_mac, 6);
+		reply_arp->ar_dest_ip = incoming_arp->ar_src_ip;
 
 		/*Print what's in the reply before sending it*/
 		printf("the reply\n");
 		print_hdrs(reply, reply_size);
 
 		/*send it*/
-		int result = sr_send_packet(sr, reply, reply_size, interface);
+		int result = sr_send_packet(sr, reply, reply_size, incoming_interface);
 		if (result != 0)
 		{
 			fprintf(stderr, "error has occurred sending the packet.\n");
+		}
+    }
+    else if (ntohs(incoming_arp->ar_op) == arp_op_reply)
+    {
+    	printf("got an incoming arp reply\n");
+
+    	/*BLINDLY add it to the arp cache*/
+		struct sr_arpreq *arp_reply_backlog;
+		arp_reply_backlog = sr_arpcache_insert(&(sr->cache), incoming_arp->ar_src_mac, incoming_arp->ar_src_ip);
+
+		/*straight up copy and paste from ar_op == arp_op_request*/
+		/*only process the backlog if there is one. otherwise backlog->packet will give a memory read exception*/
+		if(arp_reply_backlog != NULL)
+		{
+			/*process the backlog of packets based on its type*/
+			struct sr_packet *backlog_packet = arp_reply_backlog->packets;
+			while (backlog_packet != NULL)
+			{
+				sr_ethernet_hdr_t *backlog_eheader = backlog_packet->buf;
+				if (ntohs(backlog_eheader->ether_type == ethertype_ip))
+				{
+					handle_arp(sr, backlog_packet->buf, backlog_packet->len, backlog_packet->iface);
+				}
+				else /*if(ntohs(orig_eheader->ether_type = ethertype_arp))*/
+				{
+					handle_ip(sr, backlog_packet->buf, backlog_packet->len, backlog_packet->iface);
+				}
+				backlog_packet = backlog_packet->next;
+			}
+			/*backlog has been completed, get rid of this request*/
+			sr_arpreq_destroy(&(sr->cache), arp_reply_backlog);
 		}
     }
 }
@@ -309,7 +390,7 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
         }
         else{
         fprintf(stdout,"IP Dest doesn't exists in ARP Cache \n");
-        sr_arpcache_queuereq(&sr->cache,response_ip_header->ip_dst, reply_packet, size, interface);
+        sr_arpcache_queuereq(&sr->cache,response_ip_header->ip_dst, packet, len, interface);
         }
         return;
     }
