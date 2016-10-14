@@ -75,7 +75,18 @@ void print_hdr_eth(uint8_t *buf) {
   print_addr_eth(ehdr->ether_dhost);
   fprintf(stderr, "\tsource: ");
   print_addr_eth(ehdr->ether_shost);
-  fprintf(stderr, "\ttype: %d\n", ntohs(ehdr->ether_type));
+  if(ntohs(ehdr->ether_type) == ethertype_ip)
+  {
+	  fprintf(stderr, "\ttype: ip\n");
+  }
+  else if(ntohs(ehdr->ether_type) == ethertype_arp)
+  {
+	  fprintf(stderr, "\ttype: arp\n");
+  }
+  else
+  {
+	  fprintf(stderr, "\ttype UNKNOWN: %d\n", ntohs(ehdr->ether_type));
+  }
 }
 
 /* Prints out fields in IP header. */
@@ -128,7 +139,18 @@ void print_hdr_arp(uint8_t *buf) {
   fprintf(stderr, "\tprotocol type: %d\n", ntohs(arp_hdr->ar_protocol_type));
   fprintf(stderr, "\thardware address length: %d\n", arp_hdr->ar_mac_addr_len);
   fprintf(stderr, "\tprotocol address length: %d\n", arp_hdr->ar_ip_addr_len);
-  fprintf(stderr, "\topcode: %d\n", ntohs(arp_hdr->ar_op));
+  if(ntohs(arp_hdr->ar_op) == arp_op_request)
+  {
+	  fprintf(stderr, "\topcode: request\n");
+  }
+  else if(ntohs(arp_hdr->ar_op) == arp_op_reply)
+  {
+	  fprintf(stderr, "\topcode: reply\n");
+  }
+  else
+  {
+	  fprintf(stderr, "\topcode UNKNOWN: %d\n", ntohs(arp_hdr->ar_op));
+  }
 
   fprintf(stderr, "\tsender hardware address: ");
   print_addr_eth(arp_hdr->ar_src_mac);
