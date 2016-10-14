@@ -28,11 +28,7 @@
 /*Global*/
 
 static uint32_t* crc32Lookup;
-void handle_arp(struct sr_instance* sr, uint8_t * packet, unsigned int len, char* interface);
-void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char* interface);
 int sanity_check(sr_ip_hdr_t *ipheader);
-void handle_arp(struct sr_instance* sr, uint8_t * packet, unsigned int len, char* interface);
-void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char* interface);
 
 /*---------------------------------------------------------------------
  * Method: sr_init(void)
