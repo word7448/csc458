@@ -125,7 +125,7 @@ void sr_arpcache_sweepreqs(struct sr_instance *sr)
 		   print_hdrs(arp_request, arp_request_size);
 
 		   /*send the arp request for the first packet from the interface it came from*/
-		   sr_send_packet(sr, arp_request, arp_request_size, first_packet->iface);
+		   handle_arp(sr, arp_request, arp_request_size, first_packet->iface);
 		   free(arp_request);
 	   }
 	   else
