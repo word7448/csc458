@@ -135,9 +135,9 @@ void print_hdr_arp(uint8_t *buf) {
   fprintf(stderr, "\tsender ip address: ");
   print_addr_ip_int(ntohl(arp_hdr->ar_src_ip));
 
-  fprintf(stderr, "\ttarget hardware address: ");
+  fprintf(stderr, "\tdestination hardware address: ");
   print_addr_eth(arp_hdr->ar_dest_mac);
-  fprintf(stderr, "\ttarget ip address: ");
+  fprintf(stderr, "\tdestination ip address: ");
   print_addr_ip_int(ntohl(arp_hdr->ar_dest_ip));
 }
 
