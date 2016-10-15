@@ -87,7 +87,7 @@ void sr_handlepacket(struct sr_instance* sr,
     /* Ethernet Header */
     sr_ethernet_hdr_t *eth_hdr = (sr_ethernet_hdr_t*) packet;
     print_hdr_eth((uint8_t *)eth_hdr);
-    
+    char *ever_pointed = ever_pointer(sr, interface);
     
     uint16_t ethernet_type = ethertype((uint8_t*) eth_hdr);
     
@@ -95,12 +95,12 @@ void sr_handlepacket(struct sr_instance* sr,
      if (ethernet_type == ethertype_arp){
         
         fprintf(stdout,"ARP Packet Received\n");
-        handle_arp(sr, packet, len, interface);
+        handle_arp(sr, packet, len, ever_pointed);
     }
      else if (ethernet_type == ethertype_ip){
          
          fprintf(stdout,"IP Packet Received\n");
-         handle_ip(sr, packet, len, interface);
+         handle_ip(sr, packet, len, ever_pointed);
      }
     
      else{

@@ -10,6 +10,7 @@
 #include "sr_router.h"
 #include "sr_if.h"
 #include "sr_protocol.h"
+#include "sr_utils.h"
 
 /* 
   This function gets called every second. For each request sent out, we keep
@@ -34,7 +35,7 @@ void sr_arpcache_sweepreqs(struct sr_instance *sr)
 			   /*get the ip of the failed packet based on whether it's ip or arp*/
 			   sr_ethernet_hdr_t *orig_eheader = failed_packet->buf;
 			   uint32_t failed_ip = 0;
-			   if(ntohs(orig_eheader->ether_type == ethertype_ip))
+			   if(ntohs(orig_eheader->ether_type) == ethertype_ip)
 			   {
 				   sr_ip_hdr_t *orig_ipheader = failed_packet->buf + sizeof(sr_ethernet_hdr_t);
 				   failed_ip = orig_ipheader->ip_src;
@@ -94,12 +95,24 @@ void sr_arpcache_sweepreqs(struct sr_instance *sr)
 		   request->sent = now;
 		   request->times_sent++;
 
-		   /*all destination ips will be the same for an arp request since there can be only 1 ip/mac pairing*/
-		   /*just pull the destination ip from the first packet*/
 		   struct sr_packet *first_packet = request->packets;
 		   sr_ethernet_hdr_t *first_eheader = first_packet->buf;
-		   sr_ip_hdr_t *first_ipheader = first_packet->buf + sizeof(sr_ethernet_hdr_t);
 		   uint8_t mac_unknown[6] = {0, 0, 0, 0, 0, 0};
+
+		   /*get source and destination based on packet type*/
+		   uint32_t source = 0, dest = 0;
+		   if(ntohs(first_eheader->ether_type) == ethertype_ip)
+		   {
+			   sr_ip_hdr_t *orig_ipheader = first_packet->buf + sizeof(sr_ethernet_hdr_t);
+			   source = orig_ipheader->ip_src;
+			   dest = orig_ipheader->ip_dst;
+		   }
+		   else /*if(ntohs(orig_eheader->ether_type = ethertype_arp))*/
+		   {
+			   sr_arp_hdr_t *orig_arpheader = first_packet->buf + sizeof(sr_ethernet_hdr_t);
+			   source = orig_arpheader->ar_src_ip;
+			   dest = orig_arpheader->ar_dest_ip;
+		   }
 
 		   /**
 		    * This request is actually for the first packet. While each ip packet in this arp request is for
@@ -127,9 +140,9 @@ void sr_arpcache_sweepreqs(struct sr_instance *sr)
 		   request_aheader->ar_ip_addr_len = 4;
 		   request_aheader->ar_op = htons(arp_op_request);
 		   memcpy(request_aheader->ar_src_mac, first_eheader->ether_shost, 6);
-		   request_aheader->ar_src_ip = first_ipheader->ip_src;
+		   request_aheader->ar_src_ip = source;
 		   memcpy(request_aheader->ar_dest_mac, mac_unknown, 6);
-		   request_aheader->ar_dest_ip = first_ipheader->ip_dst;
+		   request_aheader->ar_dest_ip = dest;
 
 		   printf("sweepreqs request headers\n");
 		   print_hdrs(arp_request, arp_request_size);
@@ -210,8 +223,9 @@ struct sr_arpreq *sr_arpcache_queuereq(struct sr_arpcache *cache,
         new_pkt->buf = (uint8_t *)malloc(packet_len);
         memcpy(new_pkt->buf, packet, packet_len);
         new_pkt->len = packet_len;
-		new_pkt->iface = (char *)malloc(sr_IFACE_NAMELEN);
-        strncpy(new_pkt->iface, iface, sr_IFACE_NAMELEN);
+		/*new_pkt->iface = (char *)malloc(sr_IFACE_NAMELEN);
+        strncpy(new_pkt->iface, iface, sr_IFACE_NAMELEN);*/
+        new_pkt->iface = iface;
         new_pkt->next = req->packets;
         req->packets = new_pkt;
     }
@@ -295,8 +309,8 @@ void sr_arpreq_destroy(struct sr_arpcache *cache, struct sr_arpreq *entry) {
             nxt = pkt->next;
             if (pkt->buf)
                 free(pkt->buf);
-            if (pkt->iface)
-                free(pkt->iface);
+            /*if (pkt->iface)
+                free(pkt->iface);*/
             free(pkt);
         }
         
