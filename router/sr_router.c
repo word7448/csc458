@@ -26,8 +26,6 @@
 
 
 /*Global*/
-
-static uint32_t* crc32Lookup;
 int sanity_check(sr_ip_hdr_t *ipheader);
 struct sr_rt *longest_prefix_match(struct sr_instance *sr, uint32_t ipdest);
 void send_icmp_unreachable(struct sr_instance* sr, char* interface, uint8_t * packet, sr_ip_hdr_t *ip_header);
@@ -329,7 +327,6 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
     /* get packet interface*/
     struct sr_if *node = 0;
     node = sr->if_list;
-	/*sr_print_if_list(node); /*OH* This part fails hard*/
     while(node){
         if(node->ip == ip_header->ip_dst){
             break;
@@ -351,18 +348,6 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
 
         fprintf(stdout, "TTL Time Exceeded, Send ICMP\n");
         send_icmp_ttlexceed(sr, interface, packet, ip_header);
-        
-/*
-        struct sr_arpentry *exists = sr_arpcache_lookup(&sr->cache,response_ip_header->ip_dst);
-        if (exists != NULL) {            fprintf(stdout,"IP Dest exists in ARP Cache, Sending ICMP ECHO \n");
-            sr_send_packet(sr, reply_packet, len, interface);
-           
-        }
-        else{
-        fprintf(stdout,"IP Dest doesn't exists in ARP Cache \n");
-        sr_arpcache_queuereq(&sr->cache,response_ip_header->ip_dst, packet, len, interface);
-        }
- */
         return;
     }
 
@@ -405,20 +390,6 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
                     ip_header->ip_src = ip_header->ip_dst;
                     ip_header->ip_dst = new_dest;
                     sr_send_packet(sr, packet, len, interface);
-                    
-                    /*
-                    struct sr_arpentry *exists = sr_arpcache_lookup(&sr->cache,ip_header->ip_dst);
-                    if (exists != NULL) {
-                        fprintf(stdout,"IP Dest exists in ARP Cache, Sending ICMP ECHO \n");
-                        sr_send_packet(sr, packet, len, interface);
-                        
-                    }
-                    else{
-                        fprintf(stdout,"IP Dest doesn't exists in ARP Cache \n");
-                        sr_arpcache_queuereq(&sr->cache,ip_header->ip_dst, packet, len, interface);
-                    }
-                     */
-
                 }
                 break;
     
@@ -461,6 +432,7 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
         }
     
     }
+    return;
 }
 
 /* Finds excuses to get rid of an IP packet */
@@ -511,7 +483,7 @@ struct sr_rt *longest_prefix_match(struct sr_instance *sr, uint32_t ipdest)
     return lprefix;
 }
 
-/* sends ICMP message */
+/* sends ICMP message for net unreachable */
 
 void send_icmp_unreachable(struct sr_instance* sr, char* interface, uint8_t * packet, sr_ip_hdr_t *ip_header) {
     /* REQUIRES */
