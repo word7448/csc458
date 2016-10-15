@@ -197,7 +197,7 @@ void handle_arp(struct sr_instance* sr, uint8_t * incoming_packet, unsigned int 
 						sr_arp_hdr_t *request_aheader = arp_broadcast + sizeof(sr_ethernet_hdr_t);
 
 						/*copy the ethernet header*/
-						memcpy(request_eheader->ether_shost, whats_my_mac(sr, incoming_interface), 6);
+						memcpy(request_eheader->ether_shost, interface_listing->mac, 6);
 						uint8_t mac_broadcast[6] = { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
 						memcpy(request_eheader->ether_dhost, mac_broadcast, 6); /*make sure it is sent to the broadcast mac*/
 						request_eheader->ether_type = htons(ethertype_arp);
@@ -208,12 +208,12 @@ void handle_arp(struct sr_instance* sr, uint8_t * incoming_packet, unsigned int 
 						request_aheader->ar_mac_addr_len = 6;
 						request_aheader->ar_ip_addr_len = 4;
 						request_aheader->ar_op = htons(arp_op_request);
-						memcpy(request_aheader->ar_src_mac, whats_my_mac(sr, incoming_interface), 6);
-						request_aheader->ar_src_ip = whats_my_ip(sr, incoming_interface);
+						memcpy(request_aheader->ar_src_mac, interface_listing->mac, 6);
+						request_aheader->ar_src_ip = interface_listing->ip;
 						memcpy(request_aheader->ar_dest_mac, mac_unknown, 6);
 						request_aheader->ar_dest_ip = incoming_arp->ar_dest_ip;
 
-						printf("broadcast request header for interface %s\n", incoming_interface);
+						printf("broadcast request header for interface %s\n", interface_listing->name);
 						print_hdrs(arp_broadcast, arp_broadcast_size);
 
 						/*send the arp broadcast for the first packet from the interface it came from*/
@@ -225,7 +225,7 @@ void handle_arp(struct sr_instance* sr, uint8_t * incoming_packet, unsigned int 
 
 	    		/*after the spam has been sent out, Q the request*/
 	            sr_arpcache_queuereq(&sr->cache, incoming_arp->ar_dest_ip, incoming_packet, incoming_len, incoming_interface);
-
+	            return;
 	    	}
     	}
 
