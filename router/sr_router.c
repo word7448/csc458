@@ -459,6 +459,9 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
                 
             case ip_protocol_icmp:
                 
+				ethernet_header = (sr_ethernet_hdr_t *)packet;
+
+
                 if (icmp_header->icmp_type == ICMP_ECHO_REQ) {
 
                     memcpy(ethernet_header->ether_dhost, ethernet_header->ether_shost, sizeof(uint8_t)*ETHER_ADDR_LEN);
@@ -476,7 +479,7 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
                     uint32_t new_dest = ip_header->ip_src;
                     ip_header->ip_src = ip_header->ip_dst;
                     ip_header->ip_dst = new_dest;
-                    sr_send_packet(sr, packet, size, interface);
+                    sr_send_packet(sr, packet, len, interface);
                     
                     /*
                     struct sr_arpentry *exists = sr_arpcache_lookup(&sr->cache,ip_header->ip_dst);
