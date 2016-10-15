@@ -471,8 +471,8 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
                     /* update IP header from current packet*/
                     ip_header->ip_sum = 0;
                     ip_header->ip_sum = cksum(ip_header, sizeof(sr_ip_hdr_t));
-                    ip_header->ip_src = ip_header->ip_dst;
                     uint32_t new_dest = ip_header->ip_src;
+                    ip_header->ip_src = ip_header->ip_dst;
                     ip_header->ip_dst = new_dest;
                     sr_send_packet(sr, packet, size, interface);
                     
