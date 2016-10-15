@@ -183,45 +183,41 @@ void handle_arp(struct sr_instance* sr, uint8_t * incoming_packet, unsigned int 
 	    		printf("arp request not for router interface, broadcasting\n");
 
 	    		/*loop through the if_list... AGAIN!!! to spam all clients*/
-	    		interface_listing = sr->if_list;
-	    		while(interface_listing != NULL)
-	    		{
-	    			/*don't send a broadcast back on the interface that sent this request*/
-	    			uint8_t mac_unknown[6] = {0, 0, 0, 0, 0, 0};
-	    			if(strcmp(incoming_interface, interface_listing->name) != 0)
-					{
-	    				/*copy and paste of arp request assembly from sweepreqs*/
-						int arp_broadcast_size = sizeof(sr_ethernet_hdr_t) + sizeof(sr_arp_hdr_t);
-						uint8_t *arp_broadcast = malloc(arp_broadcast_size);
-						sr_ethernet_hdr_t *request_eheader = arp_broadcast;
-						sr_arp_hdr_t *request_aheader = arp_broadcast + sizeof(sr_ethernet_hdr_t);
+					uint8_t mac_unknown[6] = { 0, 0, 0, 0, 0, 0 };
+					/*copy and paste of arp request assembly from sweepreqs*/
+					int arp_broadcast_size = sizeof(sr_ethernet_hdr_t) + sizeof(sr_arp_hdr_t);
+					uint8_t *arp_broadcast = malloc(arp_broadcast_size);
+					sr_ethernet_hdr_t *request_eheader = arp_broadcast;
+					sr_arp_hdr_t *request_aheader = arp_broadcast + sizeof(sr_ethernet_hdr_t);
 
-						/*copy the ethernet header*/
-						memcpy(request_eheader->ether_shost, interface_listing->mac, 6);
-						uint8_t mac_broadcast[6] = { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
-						memcpy(request_eheader->ether_dhost, mac_broadcast, 6); /*make sure it is sent to the broadcast mac*/
-						request_eheader->ether_type = htons(ethertype_arp);
+					/* Determine the suitable interface to broadcast on */
+					struct sr_rt* broadcast_rt = longest_prefix_match(sr, incoming_arp->ar_dest_ip);
+					struct sr_if* broadcast_if = sr_get_interface(sr, broadcast_rt->interface);
 
-						/*make the arp header*/
-						request_aheader->ar_hardware_type = htons(arp_hdr_ethernet);
-						request_aheader->ar_protocol_type = htons(arp_hdr_ip);
-						request_aheader->ar_mac_addr_len = 6;
-						request_aheader->ar_ip_addr_len = 4;
-						request_aheader->ar_op = htons(arp_op_request);
-						memcpy(request_aheader->ar_src_mac, interface_listing->mac, 6);
-						request_aheader->ar_src_ip = interface_listing->ip;
-						memcpy(request_aheader->ar_dest_mac, mac_unknown, 6);
-						request_aheader->ar_dest_ip = incoming_arp->ar_dest_ip;
+					/*copy the ethernet header*/
+					memcpy(request_eheader->ether_shost, broadcast_if->mac, 6);
+					uint8_t mac_broadcast[6] = { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
+					memcpy(request_eheader->ether_dhost, mac_broadcast, 6); /*make sure it is sent to the broadcast mac*/
+					request_eheader->ether_type = htons(ethertype_arp);
 
-						printf("broadcast request header for interface %s\n", interface_listing->name);
-						print_hdrs(arp_broadcast, arp_broadcast_size);
+					
+					/*make the arp header*/
+					request_aheader->ar_hardware_type = htons(arp_hdr_ethernet);
+					request_aheader->ar_protocol_type = htons(arp_hdr_ip);
+					request_aheader->ar_mac_addr_len = 6;
+					request_aheader->ar_ip_addr_len = 4;
+					request_aheader->ar_op = htons(arp_op_request);
+					memcpy(request_aheader->ar_src_mac, broadcast_if->mac, 6);
+					request_aheader->ar_src_ip = broadcast_if->ip;
+					memcpy(request_aheader->ar_dest_mac, mac_unknown, 6);
+					request_aheader->ar_dest_ip = incoming_arp->ar_dest_ip;
 
-						/*send the arp broadcast for the first packet from the interface it came from*/
-						sr_send_packet(sr, arp_broadcast, arp_broadcast_size, interface_listing);
-						free(arp_broadcast);
-					}
-	    			interface_listing = interface_listing->next;
-	    		}
+					printf("broadcast request header for interface %s\n", broadcast_if->name);
+					print_hdrs(arp_broadcast, arp_broadcast_size);
+
+					/*send the arp broadcast for the first packet from the interface it came from*/
+					sr_send_packet(sr, arp_broadcast, arp_broadcast_size, broadcast_rt->interface);
+					free(arp_broadcast);
 
 	    		/*after the spam has been sent out, Q the request*/
 	            sr_arpcache_queuereq(&sr->cache, incoming_arp->ar_dest_ip, incoming_packet, incoming_len, incoming_interface);
