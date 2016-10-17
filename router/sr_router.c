@@ -486,7 +486,7 @@ void send_icmp(struct sr_instance* sr, char* interface, uint8_t * packet, sr_ip_
     assert(interface);
     assert(packet);
     
-    printf("*** -> Received ICMP REQ with code %d and type %d \n", code,type);
+    printf("************************************************************************ -> Received ICMP REQ with code %d and type %d \n", code,type);
     
     int size = sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_hdr_t);
     uint8_t *response_packet = malloc(size);
