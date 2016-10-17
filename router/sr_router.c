@@ -28,8 +28,7 @@
 /*Global*/
 int sanity_check(sr_ip_hdr_t *ipheader);
 struct sr_rt *longest_prefix_match(struct sr_instance *sr, uint32_t ipdest);
-void send_icmp_unreachable(struct sr_instance* sr, char* interface, uint8_t * packet, sr_ip_hdr_t *ip_header);
-void send_icmp_ttlexceed(struct sr_instance* sr, char* interface, uint8_t * packet, sr_ip_hdr_t *ip_header);
+void send_icmp(struct sr_instance* sr, char* interface, uint8_t * packet, sr_ip_hdr_t *ip_header, int code, int type);
 
 /*---------------------------------------------------------------------
  * Method: sr_init(void)
@@ -343,7 +342,7 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
     } else {
 
         fprintf(stdout, "TTL Time Exceeded, Send ICMP\n");
-        send_icmp_ttlexceed(sr, interface, packet, ip_header);
+        send_icmp(sr, interface, packet, ip_header, 11, 0);
         return;
     }
 
@@ -359,7 +358,7 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
             case ip_protocol_udp:
                 
                 fprintf(stdout,"Recieved TCP or UDP Packet. Sending 'ICMP: Port Unreachable' to Source. \n");
-                send_icmp_unreachable(sr, interface, packet, ip_header);
+                send_icmp(sr, interface, packet, ip_header, 3, 3);
                 
                 break;
                 
@@ -424,7 +423,7 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
         } else {
             fprintf(stdout,"No match. Sending ICMP net unreachable...\n");
             
-            send_icmp_unreachable(sr, interface, packet, ip_header);
+            send_icmp(sr, interface, packet, ip_header, 0, 3 );
         }
     
     }
@@ -481,13 +480,15 @@ struct sr_rt *longest_prefix_match(struct sr_instance *sr, uint32_t ipdest)
 
 /* sends ICMP message for net unreachable */
 
-void send_icmp_unreachable(struct sr_instance* sr, char* interface, uint8_t * packet, sr_ip_hdr_t *ip_header) {
+void send_icmp(struct sr_instance* sr, char* interface, uint8_t * packet, sr_ip_hdr_t *ip_header, int code, int type) {
     /* REQUIRES */
     assert(sr);
     assert(interface);
     assert(packet);
     
-    int size = sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_t3_hdr_t);
+    printf("*** -> Received ICMP REQ with code %d and type %d \n", code,type);
+    
+    int size = sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_hdr_t);
     uint8_t *response_packet = malloc(size);
     
     sr_ethernet_hdr_t *ethernet_header = (sr_ethernet_hdr_t *) packet;
@@ -515,11 +516,9 @@ void send_icmp_unreachable(struct sr_instance* sr, char* interface, uint8_t * pa
     response_ip_header->ip_sum = cksum(response_ip_header, sizeof(sr_ip_hdr_t));
     
     /* build ICMP Header */
-    sr_icmp_t3_hdr_t *response_icmp_header = (sr_icmp_t3_hdr_t *)(response_packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
-    response_icmp_header->icmp_type = ICMP_UNREACHABLE;
-    response_icmp_header->icmp_code = 0;
-    response_icmp_header->unused = 0;
-    response_icmp_header->next_mtu = 0;
+    sr_icmp_hdr_t *response_icmp_header = (sr_icmp_hdr_t *)(response_packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
+    response_icmp_header->icmp_type = type;
+    response_icmp_header->icmp_code = code;
     response_icmp_header->icmp_sum = 0;
     memcpy(response_icmp_header->data, ip_header, ICMP_DATA_SIZE);
     response_icmp_header->icmp_sum = cksum(response_icmp_header, sizeof(sr_icmp_t3_hdr_t));
@@ -529,53 +528,7 @@ void send_icmp_unreachable(struct sr_instance* sr, char* interface, uint8_t * pa
 }
 
 
-/* sends ICMP message ttl exceed*/
 
-void send_icmp_ttlexceed(struct sr_instance* sr, char* interface, uint8_t * packet, sr_ip_hdr_t *ip_header) {
-    /* REQUIRES */
-    assert(sr);
-    assert(interface);
-    assert(packet);
-    
-    int size = sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_hdr_t);
-    uint8_t *response_packet = malloc(size);
-    
-    sr_ethernet_hdr_t *ethernet_header = (sr_ethernet_hdr_t *) packet;
-    
-    /* Ethernet header */
-    sr_ethernet_hdr_t *response_ethernet_header = (sr_ethernet_hdr_t *)response_packet;
-    memcpy(response_ethernet_header->ether_dhost, ethernet_header->ether_shost, sizeof(sr_ethernet_hdr_t));
-    memcpy(response_ethernet_header->ether_shost, sr_get_interface(sr, interface)->mac, sizeof(sr_ethernet_hdr_t));
-    response_ethernet_header->ether_type = htons(ethertype_ip);
-    
-    
-    /* IP header */
-    sr_ip_hdr_t *response_ip_header = (sr_ip_hdr_t *)(response_packet + sizeof(sr_ethernet_hdr_t));
-    
-    response_ip_header->ip_dst = ip_header->ip_src;
-    response_ip_header->ip_p = ip_protocol_icmp;
-    response_ip_header->ip_ttl = 255;
-    response_ip_header->ip_tos = 0;
-    response_ip_header->ip_v = 4;
-    response_ip_header->ip_hl = sizeof(sr_ip_hdr_t)/4;
-    response_ip_header->ip_len = htons(sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_hdr_t));
-    response_ip_header->ip_id = htons(0);
-    response_ip_header->ip_off = htons(IP_DF);
-    response_ip_header->ip_src = sr_get_interface(sr, interface)->ip;
-    response_ip_header->ip_sum = 0;
-    response_ip_header->ip_sum = cksum(response_ip_header, sizeof(sr_ip_hdr_t));
-    
-    /* ICMP Header */
-    sr_icmp_hdr_t *response_icmp_header = (sr_icmp_hdr_t *)(response_packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
-    response_icmp_header->icmp_type = ICMP_TIME_EXCEEDED;
-    response_icmp_header->icmp_code = 0;
-    memcpy(response_icmp_header->data, response_ip_header, ICMP_DATA_SIZE);
-    response_icmp_header->icmp_sum = 0;
-    response_icmp_header->icmp_sum = cksum(response_icmp_header, sizeof(sr_icmp_hdr_t));
-    sr_send_packet(sr, response_packet, size, interface);
-    free(response_packet);
-    
-}
 
 
 
