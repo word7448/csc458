@@ -37,12 +37,12 @@ void sr_arpcache_sweepreqs(struct sr_instance *sr)
 			   uint32_t failed_ip = 0;
 			   if(ntohs(orig_eheader->ether_type) == ethertype_ip)
 			   {
-				   sr_ip_hdr_t *orig_ipheader = (sr_ip_hdr_t*)failed_packet->buf + sizeof(sr_ethernet_hdr_t);
+				   sr_ip_hdr_t *orig_ipheader = (sr_ip_hdr_t*)(failed_packet->buf + sizeof(sr_ethernet_hdr_t));
 				   failed_ip = orig_ipheader->ip_src;
 			   }
 			   else /*if(ntohs(orig_eheader->ether_type = ethertype_arp))*/
 			   {
-				   sr_arp_hdr_t *orig_arpheader = (sr_arp_hdr_t*)failed_packet->buf + sizeof(sr_ethernet_hdr_t);
+				   sr_arp_hdr_t *orig_arpheader = (sr_arp_hdr_t*)(failed_packet->buf + sizeof(sr_ethernet_hdr_t));
 				   failed_ip = orig_arpheader->ar_src_ip;
 			   }
 
