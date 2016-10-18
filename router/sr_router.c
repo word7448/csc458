@@ -329,27 +329,18 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
     }
     
     
-    
 
-	if (ip_header->ip_ttl == 1 && node == NULL) {
 
-		fprintf(stdout, "TTL Time Exceeded, Send ICMP\n");
-		send_icmp(sr, interface, packet, ip_header,len, ICMP_TIME_EXCEEDED, ICMP_ECHO_REPLY);
-		return;
-
-	}
-	else if (ip_header->ip_ttl == 0) {
-
-        fprintf(stdout, "TTL Time Exceeded, Send ICMP\n");
-        send_icmp(sr, interface, packet, ip_header,len, ICMP_TIME_EXCEEDED, ICMP_ECHO_REPLY);
-        return;
-    }
-	else if (ip_header->ip_ttl > 0) {
+    if (ip_header->ip_ttl > 1) {
 			fprintf(stdout, "TTL Decremented\n");
 			ip_header->ip_ttl = ip_header->ip_ttl - 1;
 			ip_header->ip_sum = 0;
 			ip_header->ip_sum = cksum(ip_header, ip_header->ip_hl * 4);
 	}
+    else{
+        fprintf(stdout, "TTL EXCEEDED!!!!!!!!!!!!!!!!\n");
+                 send_icmp(sr, interface, packet, ip_header,len, ICMP_TIME_EXCEEDED, ICMP_ECHO_REPLY);
+    }
 
 
     if (node != NULL) {
