@@ -29,7 +29,7 @@
 int sanity_check(sr_ip_hdr_t *ipheader);
 struct sr_rt *longest_prefix_match(struct sr_instance *sr, uint32_t ipdest);
 void send_icmp(struct sr_instance* sr, char* interface, uint8_t * packet, sr_ip_hdr_t *ip_header, int code, int type);
-int pack_l2_and_ship(struct sr_instance *sr, void *packet, int len, struct sr_rt* prefix_match, struct sr_arpentry *entry);
+int pack_l2_and_ship(struct sr_instance *sr, void *packet, int len, struct sr_if *interface, unsigned char *dest_mac);
 
 /*---------------------------------------------------------------------
  * Method: sr_init(void)
@@ -164,7 +164,7 @@ void handle_arp(struct sr_instance* sr, uint8_t * incoming_packet, unsigned int 
 							}
 							else /*if(ntohs(orig_eheader->ether_type = ethertype_arp))*/
 							{
-								handle_ip(sr, backlog_packet->buf, backlog_packet->len, backlog_packet->iface);
+								pack_l2_and_ship(sr, backlog_packet->buf, backlog_packet->len, backlog_packet->iface, &dest_mac);
 							}
 							backlog_packet = backlog_packet->next;
 						}
@@ -281,7 +281,7 @@ void handle_arp(struct sr_instance* sr, uint8_t * incoming_packet, unsigned int 
 				}
 				else /*if(ntohs(orig_eheader->ether_type = ethertype_arp))*/
 				{
-					handle_ip(sr, backlog_packet->buf, backlog_packet->len, backlog_packet->iface);
+					pack_l2_and_ship(sr, backlog_packet->buf, backlog_packet->len, backlog_packet->iface, incoming_arp->ar_src_mac);
 				}
 				backlog_packet = backlog_packet->next;
 			}
@@ -402,12 +402,19 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
         struct sr_rt *prefix_match = longest_prefix_match(sr, ip_header->ip_dst);
         
         if (prefix_match){
+			/* Prepare packet for sending */
             fprintf(stdout,"longest prefix match found\n");
             struct sr_arpentry *entry = sr_arpcache_lookup(&sr->cache, prefix_match->gw.s_addr);
-            
+			struct sr_if *interface = sr_get_interface(sr, prefix_match->interface);
+			print_addr_ip_int(prefix_match->gw.s_addr);
+			print_addr_eth(interface->mac);
+			print_addr_ip_int(interface->ip);
+			sr_ethernet_hdr_t *reply_ethernet_header = (sr_ethernet_hdr_t *)packet;
+			memcpy(reply_ethernet_header->ether_shost, sr_get_interface(sr, interface)->mac, sizeof(uint8_t)*ETHER_ADDR_LEN);
+
             if (entry){
 				/* send to L2 packaging */
-				pack_l2_and_ship(sr, packet, len, prefix_match, entry);
+				pack_l2_and_ship(sr, packet, len, interface, entry);
                 free(entry);
             } else {
                 fprintf(stdout,"ARP Cache miss\n");
@@ -425,15 +432,13 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
 }
 
 /* Preps the L2 header and sends the packet */
-int pack_l2_and_ship(struct sr_instance *sr, void *packet, int len, struct sr_rt* prefix_match, struct sr_arpentry *entry) {
+int pack_l2_and_ship(struct sr_instance *sr, void *packet, int len, struct sr_if *interface, unsigned char *dest_mac) {
 
 	sr_ethernet_hdr_t *ethernet_header = (sr_ethernet_hdr_t *)packet;
-	struct sr_if *interface = sr_get_interface(sr, prefix_match->interface);
 
 	/* Make ethernet header */
 	sr_ethernet_hdr_t *reply_ethernet_header = (sr_ethernet_hdr_t *)packet;
-	memcpy(reply_ethernet_header->ether_dhost, entry->mac, sizeof(unsigned char) * 6);
-	memcpy(reply_ethernet_header->ether_shost, sr_get_interface(sr, interface)->mac, sizeof(uint8_t)*ETHER_ADDR_LEN);
+	memcpy(reply_ethernet_header->ether_dhost, dest_mac, sizeof(unsigned char) * 6);
 	reply_ethernet_header->ether_type = ethernet_header->ether_type;
 
 	print_hdrs(packet, len);
