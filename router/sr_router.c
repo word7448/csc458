@@ -547,7 +547,7 @@ void send_icmp(struct sr_instance* sr, char* interface, uint8_t * packet, sr_ip_
             sr_send_packet (sr, response_packet, size, interface);
             free(response_packet);
         } else {
-              sr_arpcache_queuereq(&sr->cache, packet->ip_dst, response_packet, len, interface);
+              sr_arpcache_queuereq(&sr->cache, response_ip_header->ip_dst, packet, len, interface);
         }
         
 
