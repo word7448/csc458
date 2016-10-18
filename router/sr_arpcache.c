@@ -33,25 +33,25 @@ void sr_arpcache_sweepreqs(struct sr_instance *sr)
 		   while(failed_packet != NULL)
 		   {
 			   /*get the ip of the failed packet based on whether it's ip or arp*/
-			   sr_ethernet_hdr_t *orig_eheader = failed_packet->buf;
+			   sr_ethernet_hdr_t *orig_eheader = (sr_ethernet_hdr_t*)failed_packet->buf;
 			   uint32_t failed_ip = 0;
 			   if(ntohs(orig_eheader->ether_type) == ethertype_ip)
 			   {
-				   sr_ip_hdr_t *orig_ipheader = failed_packet->buf + sizeof(sr_ethernet_hdr_t);
+				   sr_ip_hdr_t *orig_ipheader = (sr_ip_hdr_t*)failed_packet->buf + sizeof(sr_ethernet_hdr_t);
 				   failed_ip = orig_ipheader->ip_src;
 			   }
 			   else /*if(ntohs(orig_eheader->ether_type = ethertype_arp))*/
 			   {
-				   sr_arp_hdr_t *orig_arpheader = failed_packet->buf + sizeof(sr_ethernet_hdr_t);
+				   sr_arp_hdr_t *orig_arpheader = (sr_arp_hdr_t*)failed_packet->buf + sizeof(sr_ethernet_hdr_t);
 				   failed_ip = orig_arpheader->ar_src_ip;
 			   }
 
 			   /*DT*create icmp fail and make its internals easily accessible*/
 			   int fail_length = sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_t3_hdr_t);
 			   uint8_t *fail = malloc(fail_length);
-			   sr_ethernet_hdr_t *fail_eheader = fail;
-			   sr_ip_hdr_t *fail_ipheader = fail + sizeof(sr_ethernet_hdr_t);
-			   sr_icmp_t3_hdr_t*fail_icmp = fail + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t);
+			   sr_ethernet_hdr_t *fail_eheader = (sr_ethernet_hdr_t*)fail;
+			   sr_ip_hdr_t *fail_ipheader = (sr_ip_hdr_t*)(fail + sizeof(sr_ethernet_hdr_t));
+			   sr_icmp_t3_hdr_t *fail_icmp = (sr_icmp_t3_hdr_t*)(fail + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
 
 			   /*DT*fill in ethernet header*/
 			   memcpy(fail_eheader->ether_dhost, orig_eheader->ether_shost, 6);
@@ -59,17 +59,19 @@ void sr_arpcache_sweepreqs(struct sr_instance *sr)
 			   fail_eheader->ether_type = htons(ethertype_ip);
 
 			   /*DT*fill in ip header*/
+			   fail_ipheader->ip_v = 4;
+			   fail_ipheader->ip_hl = sizeof(sr_ip_hdr_t)/4;
 			   fail_ipheader->ip_tos = 0;
 			   fail_ipheader->ip_len = htons(fail_length - sizeof(sr_ethernet_hdr_t)); /*DT*everything but the ethernet header*/
 			   fail_ipheader->ip_id = 0;
-			   fail_ipheader->ip_off = 0;
+			   fail_ipheader->ip_off = htons(IP_DF);
 			   fail_ipheader->ip_ttl = 64;
 			   fail_ipheader->ip_p = ip_protocol_icmp;
 			   fail_ipheader->ip_src = whats_my_ip(sr, failed_packet->iface);
 			   fail_ipheader->ip_dst = failed_ip;
 			   fail_ipheader->ip_sum = 0; /*zero out before calculating*/
 			   uint16_t ip_checksum = cksum(fail_ipheader, sizeof(sr_ip_hdr_t));
-			   fail_ipheader->ip_sum = htons(ip_checksum);
+			   fail_ipheader->ip_sum = ip_checksum;
 
 			   /*DT* fill in the icmp stuff*/
 			   /*DT* wikipedia: https://en.wikipedia.org/wiki/Internet_Control_Message_Protocol */
@@ -81,13 +83,17 @@ void sr_arpcache_sweepreqs(struct sr_instance *sr)
 			   memcpy(fail_icmp->data, fail_ipheader, sizeof(sr_ip_hdr_t));
 			   fail_icmp->icmp_sum = 0;
 			   uint16_t icmp_checksum = cksum(fail_icmp, sizeof(sr_icmp_t3_hdr_t));
-			   fail_icmp->icmp_sum = htons(icmp_checksum);
+			   fail_icmp->icmp_sum = icmp_checksum;
 
+			   printf("--------------------------------------------------------------------------\n");
+			   printf("sending out notification of fail on %s\n", failed_packet->iface);
+			   print_hdrs((uint8_t*)fail, fail_length);
 			   sr_send_packet(sr, fail, fail_length, failed_packet->iface);
 			   free(fail);
 			   failed_packet = failed_packet->next;
+			   printf("--------------------------------------------------------------------------\n");
 		   }
-		   sr_arpreq_destroy(sr, request); /*DT* this request is hopeless. failures have been sent. get rid of it*/
+		   sr_arpreq_destroy(&(sr->cache), request); /*DT* this request is hopeless. failures have been sent. get rid of it*/
 	   }
 	   else if(diff >= 1)
 	   {
@@ -96,20 +102,20 @@ void sr_arpcache_sweepreqs(struct sr_instance *sr)
 		   request->times_sent++;
 
 		   struct sr_packet *first_packet = request->packets;
-		   sr_ethernet_hdr_t *first_eheader = first_packet->buf;
+		   sr_ethernet_hdr_t *first_eheader = (sr_ethernet_hdr_t*)first_packet->buf;
 		   uint8_t mac_unknown[6] = {0, 0, 0, 0, 0, 0};
 
 		   /*get source and destination based on packet type*/
 		   uint32_t source = 0, dest = 0;
 		   if(ntohs(first_eheader->ether_type) == ethertype_ip)
 		   {
-			   sr_ip_hdr_t *orig_ipheader = first_packet->buf + sizeof(sr_ethernet_hdr_t);
+			   sr_ip_hdr_t *orig_ipheader = (sr_ip_hdr_t*)(first_packet->buf + sizeof(sr_ethernet_hdr_t));
 			   source = orig_ipheader->ip_src;
 			   dest = orig_ipheader->ip_dst;
 		   }
 		   else /*if(ntohs(orig_eheader->ether_type = ethertype_arp))*/
 		   {
-			   sr_arp_hdr_t *orig_arpheader = first_packet->buf + sizeof(sr_ethernet_hdr_t);
+			   sr_arp_hdr_t *orig_arpheader = (sr_arp_hdr_t*)(first_packet->buf + sizeof(sr_ethernet_hdr_t));
 			   source = orig_arpheader->ar_src_ip;
 			   dest = orig_arpheader->ar_dest_ip;
 		   }
@@ -124,8 +130,8 @@ void sr_arpcache_sweepreqs(struct sr_instance *sr)
 		    */
 		   int arp_request_size = sizeof(sr_ethernet_hdr_t) + sizeof(sr_arp_hdr_t);
 		   uint8_t *arp_request = malloc(arp_request_size);
-		   sr_ethernet_hdr_t *request_eheader = arp_request;
-		   sr_arp_hdr_t *request_aheader = arp_request + sizeof(sr_ethernet_hdr_t);
+		   sr_ethernet_hdr_t *request_eheader = (sr_ethernet_hdr_t*)arp_request;
+		   sr_arp_hdr_t *request_aheader = (sr_arp_hdr_t*)(arp_request + sizeof(sr_ethernet_hdr_t));
 
 		   /*copy the ethernet header*/
 		   memcpy(request_eheader, first_eheader, sizeof(sr_ethernet_hdr_t));
@@ -153,7 +159,7 @@ void sr_arpcache_sweepreqs(struct sr_instance *sr)
 	   }
 	   else
 	   {
-		   printf("difference is less than 1 (%d). it's too soon to try again\n", diff);
+		   printf("difference is less than 1 (%ld). it's too soon to try again\n", diff);
 	   }
 	   request = next;
    }
