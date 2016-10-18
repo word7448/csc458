@@ -558,7 +558,7 @@ void send_icmp(struct sr_instance* sr, char* interface, uint8_t * packet, sr_ip_
         free(response_packet);
     } else {
         fprintf(stdout,"ARP Cache miss\n");
-        sr_arpcache_queuereq(&(sr->cache), ip_header->ip_dst, packet, len, interface);
+        sr_arpcache_queuereq(&(sr->cache), response_ip_header->ip_dst, packet, len, interface);
     }
 
 }
