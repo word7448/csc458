@@ -552,24 +552,7 @@ void send_icmp(struct sr_instance* sr, char* interface, uint8_t * packet, sr_ip_
 	}
 
     
-    struct sr_arpentry *entry = sr_arpcache_lookup(&sr->cache, response_ip_header->ip_dst);
-    if (entry) {
-        struct sr_rt *prefix_match = longest_prefix_match(sr, ip_header->ip_dst);
-        struct sr_if *interface = sr_get_interface(sr, prefix_match->interface);
-        
-        /* Make ethernet header */
-        sr_ethernet_hdr_t *reply_ethernet_header = (sr_ethernet_hdr_t *)packet;
-        memcpy(reply_ethernet_header->ether_dhost, entry->mac, sizeof(unsigned char)*6);
-        memcpy(reply_ethernet_header->ether_shost, interface->mac, sizeof(uint8_t)*ETHER_ADDR_LEN);
-        reply_ethernet_header->ether_type = ethernet_header->ether_type;
-        
-        print_hdrs(packet, len);
-        
-        sr_send_packet (sr, response_packet, size, interface);
-        free(response_packet);
-    } else {
-        fprintf(stdout,"ARP Cache miss\n");
-        sr_arpcache_queuereq(&(sr->cache), response_ip_header->ip_dst, packet, len, interface);
-    }
+    sr_send_packet (sr, response_packet, size, interface);
+    free(response_packet);
 
 }
