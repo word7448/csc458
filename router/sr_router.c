@@ -334,14 +334,14 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
 	if (ip_header->ip_ttl == 1 && node == NULL) {
 
 		fprintf(stdout, "TTL Time Exceeded, Send ICMP\n");
-		send_icmp(sr, interface, packet, ip_header, ICMP_TIME_EXCEEDED, ICMP_ECHO_REPLY);
+		send_icmp(sr, interface, packet, ip_header,len, ICMP_TIME_EXCEEDED, ICMP_ECHO_REPLY);
 		return;
 
 	}
 	else if (ip_header->ip_ttl == 0) {
 
         fprintf(stdout, "TTL Time Exceeded, Send ICMP\n");
-        send_icmp(sr, interface, packet, ip_header, ICMP_TIME_EXCEEDED, ICMP_ECHO_REPLY);
+        send_icmp(sr, interface, packet, ip_header,len, ICMP_TIME_EXCEEDED, ICMP_ECHO_REPLY);
         return;
     }
 	else if (ip_header->ip_ttl > 0) {
@@ -363,7 +363,7 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
             case ip_protocol_udp:
                 
                 fprintf(stdout,"Recieved TCP or UDP Packet. Sending 'ICMP: Port Unreachable' to Source. \n");
-                send_icmp(sr, interface, packet, ip_header, ICMP_UNREACHABLE, ICMP_UNREACHABLE);
+                send_icmp(sr, interface, packet, ip_header, len, ICMP_UNREACHABLE, ICMP_UNREACHABLE);
                 
                 break;
                 
@@ -430,7 +430,7 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
         } else {
             fprintf(stdout,"No match. Sending ICMP net unreachable...\n");
             
-            send_icmp(sr, interface, packet, ip_header, ICMP_UNREACHABLE, ICMP_ECHO_REPLY);
+            send_icmp(sr, interface, packet, ip_header,len, ICMP_UNREACHABLE, ICMP_ECHO_REPLY);
         }
     
     }
@@ -487,7 +487,7 @@ struct sr_rt *longest_prefix_match(struct sr_instance *sr, uint32_t ipdest)
 
 /* sends ICMP message for net unreachable */
 
-void send_icmp(struct sr_instance* sr, char* interface, uint8_t * packet, sr_ip_hdr_t *ip_header, int type, int code) {
+void send_icmp(struct sr_instance* sr, char* interface, uint8_t * packet, sr_ip_hdr_t *ip_header,unsigned int len, int type, int code) {
     /* REQUIRES */
     assert(sr);
     assert(interface);
@@ -552,7 +552,13 @@ void send_icmp(struct sr_instance* sr, char* interface, uint8_t * packet, sr_ip_
 	}
 
     
-    sr_send_packet(sr, response_packet, size, interface);
-    free(response_packet);
+    struct sr_arpentry *entry = sr_arpcache_lookup(&sr->cache, response_ip_header->ip_dst);
+    if (entry) {
+        sr_send_packet (sr, response_packet, len, interface);
+        free(response_packet);
+    } else {
+        fprintf(stdout,"ARP Cache miss\n");
+        sr_arpcache_queuereq(&(sr->cache), ip_header->ip_dst, packet, len, interface);
+    }
 
 }
