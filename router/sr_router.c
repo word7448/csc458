@@ -328,8 +328,6 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
         node = node->next;
     }
     
-    
-
 
     if (ip_header->ip_ttl > 1) {
 			fprintf(stdout, "TTL Decremented\n");
@@ -382,6 +380,7 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
                     uint32_t new_dest = ip_header->ip_src;
                     ip_header->ip_src = ip_header->ip_dst;
                     ip_header->ip_dst = new_dest;
+                    sr_arpcache_queuereq(&sr->cache, ip_header->ip_dst, packet, len, interface);
                     sr_send_packet(sr, packet, len, interface);
                 }
                 break;
