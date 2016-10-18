@@ -410,7 +410,7 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
                 memcpy(reply_ethernet_header->ether_shost, interface->mac, sizeof(uint8_t)*ETHER_ADDR_LEN);
                 reply_ethernet_header->ether_type = ethernet_header->ether_type;
                 
-                print_hdrs(packet, len);
+               /* print_hdrs(packet, len);*/
                 sr_send_packet(sr, packet, len, interface->name);
                 free(entry);
             } else {
