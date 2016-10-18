@@ -28,7 +28,7 @@
 /*Global*/
 int sanity_check(sr_ip_hdr_t *ipheader);
 struct sr_rt *longest_prefix_match(struct sr_instance *sr, uint32_t ipdest);
-void send_icmp(struct sr_instance* sr, char* interface, uint8_t * packet, sr_ip_hdr_t *ip_header, int code, int type);
+void send_icmp(struct sr_instance* sr, char* interface, uint8_t * packet, sr_ip_hdr_t *ip_header, int type, int code);
 
 /*---------------------------------------------------------------------
  * Method: sr_init(void)
@@ -342,7 +342,7 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
     } else {
 
         fprintf(stdout, "TTL Time Exceeded, Send ICMP\n");
-        send_icmp(sr, interface, packet, ip_header, 11, 0);
+        send_icmp(sr, interface, packet, ip_header, ICMP_TIME_EXCEEDED, ICMP_ECHO_REPLY);
         return;
     }
 
@@ -358,7 +358,7 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
             case ip_protocol_udp:
                 
                 fprintf(stdout,"Recieved TCP or UDP Packet. Sending 'ICMP: Port Unreachable' to Source. \n");
-                send_icmp(sr, interface, packet, ip_header, 3, 3);
+                send_icmp(sr, interface, packet, ip_header, ICMP_UNREACHABLE, ICMP_UNREACHABLE);
                 
                 break;
                 
@@ -423,7 +423,7 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
         } else {
             fprintf(stdout,"No match. Sending ICMP net unreachable...\n");
             
-            send_icmp(sr, interface, packet, ip_header, 0, 3 );
+            send_icmp(sr, interface, packet, ip_header, ICMP_ECHO_REPLY, ICMP_UNREACHABLE);
         }
     
     }
@@ -480,13 +480,13 @@ struct sr_rt *longest_prefix_match(struct sr_instance *sr, uint32_t ipdest)
 
 /* sends ICMP message for net unreachable */
 
-void send_icmp(struct sr_instance* sr, char* interface, uint8_t * packet, sr_ip_hdr_t *ip_header, int code, int type) {
+void send_icmp(struct sr_instance* sr, char* interface, uint8_t * packet, sr_ip_hdr_t *ip_header, int type, int code) {
     /* REQUIRES */
     assert(sr);
     assert(interface);
     assert(packet);
     
-    printf("************************************************************************ -> Received ICMP REQ with code %d and type %d \n", code,type);
+    printf("************************************************************************ -> Received ICMP REQ with type %d and code %d \n", type,code);
     
     int size = sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_hdr_t);
     uint8_t *response_packet = malloc(size);
@@ -526,21 +526,3 @@ void send_icmp(struct sr_instance* sr, char* interface, uint8_t * packet, sr_ip_
     free(response_packet);
 
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
