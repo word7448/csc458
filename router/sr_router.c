@@ -121,7 +121,7 @@ void handle_arp(struct sr_instance* sr, uint8_t * incoming_packet, unsigned int 
 	/*easy references to the incoming packet internals*/
     sr_ethernet_hdr_t *incoming_eth = (sr_ethernet_hdr_t*) incoming_packet;
 	sr_arp_hdr_t *incoming_arp = (sr_arp_hdr_t*)(incoming_packet + sizeof(sr_ethernet_hdr_t));
-	print_hdr_arp(incoming_arp);
+	print_hdr_arp((uint8_t*)incoming_arp);
 
 	/*assume if it's broadcasted to me, it must be for something connected to me*/
     if(ntohs(incoming_arp->ar_op) == arp_op_request)
@@ -156,7 +156,7 @@ void handle_arp(struct sr_instance* sr, uint8_t * incoming_packet, unsigned int 
 						struct sr_packet *backlog_packet = arp_request_backlog->packets;
 						while (backlog_packet != NULL)
 						{
-							sr_ethernet_hdr_t *backlog_eheader = backlog_packet->buf;
+							sr_ethernet_hdr_t *backlog_eheader = (sr_ethernet_hdr_t*)backlog_packet->buf;
 							if (ntohs(backlog_eheader->ether_type == ethertype_ip))
 							{
 								handle_arp(sr, backlog_packet->buf, backlog_packet->len, backlog_packet->iface);
@@ -186,8 +186,8 @@ void handle_arp(struct sr_instance* sr, uint8_t * incoming_packet, unsigned int 
 					/*copy and paste of arp request assembly from sweepreqs*/
 					int arp_broadcast_size = sizeof(sr_ethernet_hdr_t) + sizeof(sr_arp_hdr_t);
 					uint8_t *arp_broadcast = malloc(arp_broadcast_size);
-					sr_ethernet_hdr_t *request_eheader = arp_broadcast;
-					sr_arp_hdr_t *request_aheader = arp_broadcast + sizeof(sr_ethernet_hdr_t);
+					sr_ethernet_hdr_t *request_eheader = (sr_ethernet_hdr_t*)arp_broadcast;
+					sr_arp_hdr_t *request_aheader = (sr_arp_hdr_t*)(arp_broadcast + sizeof(sr_ethernet_hdr_t));
 
 					/* Determine the suitable interface to broadcast on */
 					struct sr_rt* broadcast_rt = longest_prefix_match(sr, incoming_arp->ar_dest_ip);
@@ -235,7 +235,7 @@ void handle_arp(struct sr_instance* sr, uint8_t * incoming_packet, unsigned int 
 		reply_eheader->ether_type = incoming_eth->ether_type;
 
 		/* Assemble arp header*/
-		sr_arp_hdr_t *reply_arp = reply + sizeof(sr_ethernet_hdr_t);
+		sr_arp_hdr_t *reply_arp = (sr_arp_hdr_t*)(reply + sizeof(sr_ethernet_hdr_t));
 		reply_arp->ar_hardware_type = incoming_arp->ar_hardware_type;
 		reply_arp->ar_protocol_type = incoming_arp->ar_protocol_type;
 		reply_arp->ar_mac_addr_len = incoming_arp->ar_mac_addr_len;
@@ -273,7 +273,7 @@ void handle_arp(struct sr_instance* sr, uint8_t * incoming_packet, unsigned int 
 			struct sr_packet *backlog_packet = arp_reply_backlog->packets;
 			while (backlog_packet != NULL)
 			{
-				sr_ethernet_hdr_t *backlog_eheader = backlog_packet->buf;
+				sr_ethernet_hdr_t *backlog_eheader = (sr_ethernet_hdr_t*)(backlog_packet->buf);
 				if (ntohs(backlog_eheader->ether_type == ethertype_ip))
 				{
 					handle_arp(sr, backlog_packet->buf, backlog_packet->len, backlog_packet->iface);
@@ -310,7 +310,7 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
 		return;
 	}
 
-	print_hdr_ip(ip_header);
+	print_hdr_ip((uint8_t*)ip_header);
 	printf("got an ip packet\n");
     
     int check_packet = sanity_check(ip_header);
@@ -411,7 +411,7 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
                 /* Make ethernet header */
                 sr_ethernet_hdr_t *reply_ethernet_header = (sr_ethernet_hdr_t *)packet;
                 memcpy(reply_ethernet_header->ether_dhost, entry->mac, sizeof(unsigned char)*6);
-                memcpy(reply_ethernet_header->ether_shost, sr_get_interface(sr, interface)->mac, sizeof(uint8_t)*ETHER_ADDR_LEN);
+                memcpy(reply_ethernet_header->ether_shost, interface->mac, sizeof(uint8_t)*ETHER_ADDR_LEN);
                 reply_ethernet_header->ether_type = ethernet_header->ether_type;
                 
                 print_hdrs(packet, len);
