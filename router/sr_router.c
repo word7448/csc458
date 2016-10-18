@@ -29,6 +29,7 @@
 int sanity_check(sr_ip_hdr_t *ipheader);
 struct sr_rt *longest_prefix_match(struct sr_instance *sr, uint32_t ipdest);
 void send_icmp(struct sr_instance* sr, char* interface, uint8_t * packet, sr_ip_hdr_t *ip_header, int code, int type);
+int pack_l2_and_ship(struct sr_instance *sr, void *packet, int len, struct sr_rt* prefix_match, struct sr_arpentry *entry);
 
 /*---------------------------------------------------------------------
  * Method: sr_init(void)
@@ -319,7 +320,7 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
         return;
     }
     
-    /* get packet interface*/
+    /* Try to short circuit processing if this packet is intended for router */
     struct sr_if *node = 0;
     node = sr->if_list;
     while(node){
@@ -347,6 +348,7 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
     }
 
 
+	/* Packet destined for this router */
     if (node != NULL) {
         uint8_t ip_type = ip_protocol(packet + sizeof(sr_ethernet_hdr_t));
         /* Get ICMP header */
@@ -404,16 +406,8 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
             struct sr_arpentry *entry = sr_arpcache_lookup(&sr->cache, prefix_match->gw.s_addr);
             
             if (entry){
-                struct sr_if *interface = sr_get_interface(sr, prefix_match->interface);
-                
-                /* Make ethernet header */
-                sr_ethernet_hdr_t *reply_ethernet_header = (sr_ethernet_hdr_t *)packet;
-                memcpy(reply_ethernet_header->ether_dhost, entry->mac, sizeof(unsigned char)*6);
-                memcpy(reply_ethernet_header->ether_shost, sr_get_interface(sr, interface)->mac, sizeof(uint8_t)*ETHER_ADDR_LEN);
-                reply_ethernet_header->ether_type = ethernet_header->ether_type;
-                
-                print_hdrs(packet, len);
-                sr_send_packet(sr, packet, len, interface->name);
+				/* send to L2 packaging */
+				pack_l2_and_ship(sr, packet, len, prefix_match, entry);
                 free(entry);
             } else {
                 fprintf(stdout,"ARP Cache miss\n");
@@ -428,6 +422,28 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
     
     }
     return;
+}
+
+/* Preps the L2 header and sends the packet */
+int pack_l2_and_ship(struct sr_instance *sr, void *packet, int len, struct sr_rt* prefix_match, struct sr_arpentry *entry) {
+
+	sr_ethernet_hdr_t *ethernet_header = (sr_ethernet_hdr_t *)packet;
+	struct sr_if *interface = sr_get_interface(sr, prefix_match->interface);
+
+	/* Make ethernet header */
+	sr_ethernet_hdr_t *reply_ethernet_header = (sr_ethernet_hdr_t *)packet;
+	memcpy(reply_ethernet_header->ether_dhost, entry->mac, sizeof(unsigned char) * 6);
+	memcpy(reply_ethernet_header->ether_shost, sr_get_interface(sr, interface)->mac, sizeof(uint8_t)*ETHER_ADDR_LEN);
+	reply_ethernet_header->ether_type = ethernet_header->ether_type;
+
+	print_hdrs(packet, len);
+	int result = sr_send_packet(sr, packet, len, interface->name);
+	if (result) {
+		fprintf(stderr, "Something went wrong with sending the packet after L2 packing\n");
+		return 1;
+	}
+
+	return 0;
 }
 
 /* Finds excuses to get rid of an IP packet */
