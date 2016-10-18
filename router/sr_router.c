@@ -541,9 +541,22 @@ void send_icmp(struct sr_instance* sr, char* interface, uint8_t * packet, sr_ip_
 		memcpy(response_icmp_header->data, ip_header, ICMP_DATA_SIZE);
 		response_icmp_header->icmp_sum = cksum(response_icmp_header, sizeof(sr_icmp_hdr_t));
 	}
-
     
+    if (type == ICMP_TIME_EXCEEDED){
+        struct sr_arpentry *entry = sr_arpcache_lookup(&sr->cache, response_ip_header->ip_dst);
+        if (entry) {
+            sr_send_packet (sr, response_packet, size, interface);
+            free(response_packet);
+        } else {
+              sr_arpcache_queuereq(&sr->cache, response_ip_header->ip_dst, response_packet, len, interface);
+        }
+        
+
+    }
+
+    else{
     sr_send_packet (sr, response_packet, size, interface);
     free(response_packet);
+    }
 
 }
