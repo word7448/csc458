@@ -28,7 +28,6 @@
 /*Global*/
 int sanity_check(sr_ip_hdr_t *ipheader);
 struct sr_rt *longest_prefix_match(struct sr_instance *sr, uint32_t ipdest);
-void send_icmp(struct sr_instance* sr, char* interface, uint8_t * packet, sr_ip_hdr_t *ip_header, int type, int code);
 
 /*---------------------------------------------------------------------
  * Method: sr_init(void)
@@ -419,7 +418,7 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
                 free(entry);
             } else {
                 fprintf(stdout,"ARP Cache miss\n");
-                sr_arpcache_queuereq(&(sr->cache), ip_header->ip_dst, packet, len, prefix_match->interface);
+                sr_arpcache_queuereq(&(sr->cache), ip_header->ip_dst, packet, len, interface);
                 
             }
         } else {
