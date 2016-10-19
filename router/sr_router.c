@@ -304,6 +304,7 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
                     uint32_t new_dest = ip_header->ip_src;
                     ip_header->ip_src = ip_header->ip_dst;
                     ip_header->ip_dst = new_dest;
+                    /*DT: will cause duplicate responses because when the response comes back, it will send the reply again*/
                     sr_arpcache_queuereq(&sr->cache, ip_header->ip_dst, packet, len, interface);
                     sr_send_packet(sr, packet, len, interface);
                 }
@@ -468,6 +469,10 @@ void send_icmp(struct sr_instance* sr, char* interface, uint8_t * packet, sr_ip_
     if (type == ICMP_TIME_EXCEEDED){
         struct sr_arpentry *entry = sr_arpcache_lookup(&sr->cache, response_ip_header->ip_dst);
         if (entry) {
+        	memcpy(response_ethernet_header->ether_dhost, entry->mac, 6);
+        	memcpy(response_ethernet_header->ether_shost, sr_get_interface(sr, interface)->mac, 6);
+        	printf("time exceeded notice\n");
+        	print_hdrs(response_packet, size);
             sr_send_packet (sr, response_packet, size, interface);
             free(response_packet);
         } else {
@@ -536,13 +541,14 @@ void handle_qreq(struct sr_instance *sr, struct sr_arpreq *request)
 			fail_icmp->icmp_code = 1;
 			fail_icmp->unused = 0; /*DT* zero out to make sure old heap garbage doesn't screw this up */
 			fail_icmp->next_mtu = 0; /*DT* according to wikipedia, you only fill this in for code 4*/
-			memcpy(fail_icmp->data, fail_ipheader, ICMP_DATA_SIZE);
+			bzero(fail_icmp->data, ICMP_DATA_SIZE);
+			memcpy(fail_icmp->data, fail_ipheader, sizeof(sr_ip_hdr_t));
 			fail_icmp->icmp_sum = 0;
 			uint16_t icmp_checksum = cksum(fail_icmp, sizeof(sr_icmp_t3_hdr_t));
 			fail_icmp->icmp_sum = icmp_checksum;
 
 			/*find out where the client is connected to*/
-			struct sr_rt *best_match = longest_prefix_match(sr, orig_ipheader->ip_dst);
+			struct sr_rt *best_match = longest_prefix_match(sr, orig_ipheader->ip_src);
 			if(best_match != NULL)
 			{
 				struct sr_arpentry *sender = sr_arpcache_lookup(&(sr->cache), orig_ipheader->ip_src);
@@ -560,22 +566,16 @@ void handle_qreq(struct sr_instance *sr, struct sr_arpreq *request)
 				}
 				else
 				{
-					printf("no cache entry on the sender");
+					printf("no cache entry on the sender\n");
 					struct sr_arpreq *request = sr_arpcache_queuereq(&(sr->cache), orig_ipheader->ip_src, fail, fail_length, best_match->interface);
 					handle_qreq(sr, request);
 				}
 			}
 			else
 			{
-
+				printf("no gateway match to mail out failure\n");
 			}
-			printf("--------------------------------------------------------------------------\n");
-			printf("sending out notification of fail on %s\n", failed_packet->iface);
-			print_hdrs((uint8_t*) fail, fail_length);
-			sr_send_packet(sr, fail, fail_length, failed_packet->iface);
-			free(fail);
-			failed_packet = failed_packet->next;
-			printf("--------------------------------------------------------------------------\n");
+
 		}
 		sr_arpreq_destroy(&(sr->cache), request); /*DT* this request is hopeless. failures have been sent. get rid of it*/
 	}
