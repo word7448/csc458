@@ -69,7 +69,7 @@ int sr_read_from_server(struct sr_instance* );
 void sr_init(struct sr_instance* );
 void sr_handlepacket(struct sr_instance* , uint8_t * , unsigned int , char* );
 void handle_arp(struct sr_instance* sr, uint8_t * packet, unsigned int len, char* interface, bool is_initiative);
-void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char* interface);
+void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char* interface, bool flag);
 void send_icmp(struct sr_instance* sr, char* interface, uint8_t * packet, sr_ip_hdr_t *ip_header,unsigned int len, int type, int code);
 void prepare_arp(struct sr_instance *sr, uint8_t *packet, int length, char *interface);
 
