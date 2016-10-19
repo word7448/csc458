@@ -94,7 +94,7 @@ void sr_handlepacket(struct sr_instance* sr,
      if (ethernet_type == ethertype_arp){
         
         fprintf(stdout,"ARP Packet Received\n");
-        handle_arp(sr, packet, len, ever_pointed, false);
+        handle_arp(sr, packet, len, ever_pointed);
     }
      else if (ethernet_type == ethertype_ip){
          
@@ -115,7 +115,7 @@ void sr_handlepacket(struct sr_instance* sr,
  Make another file for it?*/
 
 /* Takes an ARP packet and deals with it */
-void handle_arp(struct sr_instance* sr, uint8_t * incoming_packet, unsigned int incoming_len, char* incoming_interface, bool is_initiative)
+void handle_arp(struct sr_instance* sr, uint8_t * incoming_packet, unsigned int incoming_len, char* incoming_interface)
 {
 	/*easy references to the incoming packet internals*/
     sr_ethernet_hdr_t *incoming_eth = (sr_ethernet_hdr_t*) incoming_packet;
@@ -486,7 +486,7 @@ void send_icmp(struct sr_instance* sr, char* interface, uint8_t * packet, sr_ip_
 }
 
 /*generates an arp request for the packet and asks handle_arp to take care of it*/
-void prepare_arp(struct sr_instance *sr, uint8_t *packet, int length, char *interface)
+void handle_qreq(struct sr_instance *sr, struct arpreq *request)
 {
 	   sr_ethernet_hdr_t *eth_header = (sr_ethernet_hdr_t*)packet;
 	   uint8_t mac_unknown[6] = {0, 0, 0, 0, 0, 0};
