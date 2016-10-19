@@ -508,10 +508,11 @@ void handle_qreq(struct sr_instance *sr, struct sr_arpreq *request)
 			sr_icmp_t3_hdr_t *fail_icmp = (sr_icmp_t3_hdr_t*) (fail + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
 
 			/*DT*fill in ethernet header*/
+			/*
 			uint8_t *temp_mac = {0, 0, 0, 0, 0, 0};
 			memcpy(temp_mac, orig_eheader->ether_dhost);
 			memcpy(fail_eheader->ether_dhost, orig_eheader->ether_shost, 6);
-			memcpy(fail_eheader->ether_shost, temp_mac, 6);
+			memcpy(fail_eheader->ether_shost, temp_mac, 6);*/
 			fail_eheader->ether_type = htons(ethertype_ip);
 
 			/*DT*fill in ip header*/
@@ -544,24 +545,23 @@ void handle_qreq(struct sr_instance *sr, struct sr_arpreq *request)
 			struct sr_rt *best_match = longest_prefix_match(sr, orig_ipheader->ip_dst);
 			if(best_match != NULL)
 			{
-				struct sr_arpentry *exit_point = sr_arpcache_lookup(&(sr->cache), best_match->gw.s_addr);
-				if(exit_point != NULL)
+				struct sr_arpentry *sender = sr_arpcache_lookup(&(sr->cache), orig_ipheader->ip_src);
+				if(sender != NULL)
 				{
-					printf("exit point info found");
+					printf("sender info found");
 
-					/*fix up the ip source info*/
-					fail_ipheader->ip_src = sr_get_interface(sr, exit_point->ip)->;
-					fail_ipheader->ip_sum = 0;
-					fail_ipheader->ip_sum = cksum(fail_ipheader, sizeof(sr_ip_hdr_t));
+					/*set the ethernet header*/
+					memcpy(fail_eheader->ether_dhost, sender->mac, 6);
+					memcpy(fail_eheader->ether_shost, sr_get_interface(sr, best_match->interface)->mac, 6);
 
-					/*fix up the ethernet header*/
-					memcpy(fail_eheader->ether_dhost, exit_point->mac, 6);
-					memcpy(fail_eheader->ether_shost, sr_get_interface(sr, exit_point-))
+					print_hdrs(fail, fail_length);
+					send_packet(sr, fail, fail_length, best_match->interface);
+					free(fail);
 				}
 				else
 				{
 					printf("no cache entry on the exit point");
-					struct sr_arpreq *request = sr_srpcache_queuereq(&(sr->cache), best_match->gw.s_addr, fail, fail_length, best_match->interface);
+					struct sr_arpreq *request = sr_srpcache_queuereq(&(sr->cache), orig_ipheader->ip_src, fail, fail_length, best_match->interface);
 					sr_handlearpreq(sr, request);
 				}
 			}
@@ -586,64 +586,40 @@ void handle_qreq(struct sr_instance *sr, struct sr_arpreq *request)
 		request->times_sent++;
 
 		struct sr_packet *first_packet = request->packets;
-		prepare_arp(sr, first_packet->buf, first_packet->len, first_packet->iface);
+		sr_ethernet_hdr_t *eth_header = (sr_ethernet_hdr_t*)first_packet->buf;
+
+		int arp_request_size = sizeof(sr_ethernet_hdr_t) + sizeof(sr_arp_hdr_t);
+		uint8_t *arp_request = malloc(arp_request_size);
+		sr_ethernet_hdr_t *request_eheader = (sr_ethernet_hdr_t*) arp_request;
+		sr_arp_hdr_t *request_aheader = (sr_arp_hdr_t*) (arp_request + sizeof(sr_ethernet_hdr_t));
+
+		/*assemble request header*/
+		memcpy(request_eheader->ether_shost, sr_get_interface(sr, first_packet->iface)->mac, 6);
+		uint8_t mac_broadcast[6] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
+		memcpy(request_eheader->ether_dhost, mac_broadcast, 6); /*make sure it is sent to the broadcast mac*/
+		request_eheader->ether_type = htons(ethertype_arp);
+
+		/*make the arp request*/
+		request_aheader->ar_hardware_type = htons(arp_hdr_ethernet);
+		request_aheader->ar_protocol_type = htons(arp_hdr_ip);
+		request_aheader->ar_mac_addr_len = 6;
+		request_aheader->ar_ip_addr_len = 4;
+		request_aheader->ar_op = htons(arp_op_request);
+		memcpy(request_aheader->ar_src_mac, sr_get_interface(sr, first_packet->iface)->mac, 6);
+		request_aheader->ar_src_ip = sr_get_interface(sr, first_packet->iface)->ip;
+		memcpy(request_aheader->ar_dest_mac, mac_broadcast, 6);
+		request_aheader->ar_dest_ip = request->ip;
+
+		printf("helper Qreq arp request headers\n");
+		print_hdrs(arp_request, arp_request_size);
+
+		/*send the arp request for the first packet from the interface it came from*/
+		sr_send_packet(sr, arp_request, arp_request_size, first_packet->iface);
+		free(arp_request);
+
 	}
 	else
 	{
 		printf("difference is less than 1 (%ld). it's too soon to try again\n", diff);
 	}
-
-//////////////////////////////////////////////////////////////////////////////////////////////
-//////////////////////////////////////////////////////////////////////////////////////////////
-
-	   sr_ethernet_hdr_t *eth_header = (sr_ethernet_hdr_t*)packet;
-	   uint8_t mac_unknown[6] = {0, 0, 0, 0, 0, 0};
-
-	   /*get source and destination based on packet type*/
-	   uint32_t source = 0, dest = 0;
-	   if(ntohs(eth_header->ether_type) == ethertype_ip)
-	   {
-		   sr_ip_hdr_t *orig_ipheader = (sr_ip_hdr_t*)(packet + sizeof(sr_ethernet_hdr_t));
-		   source = orig_ipheader->ip_src;
-		   dest = orig_ipheader->ip_dst;
-	   }
-	   else /*if(ntohs(orig_eheader->ether_type) = ethertype_arp)*/
-	   {
-		   sr_arp_hdr_t *orig_arpheader = (sr_arp_hdr_t*)(packet + sizeof(sr_ethernet_hdr_t));
-		   source = orig_arpheader->ar_src_ip;
-		   dest = orig_arpheader->ar_dest_ip;
-	   }
-
-	   /**
-	   	   The source of this request IS WRONG. That's ok. This function isn't doing longest prefix
-	   	   match. handle_arp which is called at the end will fix up this arp request before sending it
-	    */
-	   int arp_request_size = sizeof(sr_ethernet_hdr_t) + sizeof(sr_arp_hdr_t);
-	   uint8_t *arp_request = malloc(arp_request_size);
-	   sr_ethernet_hdr_t *request_eheader = (sr_ethernet_hdr_t*)arp_request;
-	   sr_arp_hdr_t *request_aheader = (sr_arp_hdr_t*)(arp_request + sizeof(sr_ethernet_hdr_t));
-
-	   /*copy the ethernet header*/
-	   memcpy(request_eheader, eth_header, sizeof(sr_ethernet_hdr_t));
-	   uint8_t mac_broadcast[6] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
-	   memcpy(request_eheader->ether_dhost, mac_broadcast, 6); /*make sure it is sent to the broadcast mac*/
-	   request_eheader->ether_type = htons(ethertype_arp);
-
-	   /*make the arp request*/
-	   request_aheader->ar_hardware_type = htons(arp_hdr_ethernet);
-	   request_aheader->ar_protocol_type = htons(arp_hdr_ip);
-	   request_aheader->ar_mac_addr_len = 6;
-	   request_aheader->ar_ip_addr_len = 4;
-	   request_aheader->ar_op = htons(arp_op_request);
-	   memcpy(request_aheader->ar_src_mac, eth_header->ether_shost, 6);
-	   request_aheader->ar_src_ip = source;
-	   memcpy(request_aheader->ar_dest_mac, mac_unknown, 6);
-	   request_aheader->ar_dest_ip = dest;
-
-	   printf("helper function arp request headers\n");
-	   print_hdrs(arp_request, arp_request_size);
-
-	   /*send the arp request for the first packet from the interface it came from*/
-	   handle_arp(sr, arp_request, arp_request_size, interface, true);
-	   free(arp_request);
 }
