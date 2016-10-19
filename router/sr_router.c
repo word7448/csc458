@@ -15,7 +15,6 @@
 #include <assert.h>
 #include <stdlib.h>
 #include <string.h>
-#include <stdbool.h>
 
 #include "sr_if.h"
 #include "sr_rt.h"
@@ -99,7 +98,7 @@ void sr_handlepacket(struct sr_instance* sr,
      else if (ethernet_type == ethertype_ip){
          
          fprintf(stdout,"IP Packet Received\n");
-         handle_ip(sr, packet, len, ever_pointed, true);
+         handle_ip(sr, packet, len, ever_pointed);
      }
     
      else{
@@ -141,6 +140,7 @@ void handle_arp(struct sr_instance* sr, uint8_t * incoming_packet, unsigned int 
     if(ntohs(incoming_arp->ar_op) == arp_op_request)
     {
     	printf("got an incoming arp request\n");
+    	print_hdrs(incoming_packet, incoming_len);
 
 		/*now that you have the mac for the ip, make a reply*/
 		int reply_size = sizeof(sr_ethernet_hdr_t) + sizeof(sr_arp_hdr_t);
@@ -162,13 +162,13 @@ void handle_arp(struct sr_instance* sr, uint8_t * incoming_packet, unsigned int 
 		reply_arp->ar_mac_addr_len = incoming_arp->ar_mac_addr_len;
 		reply_arp->ar_ip_addr_len = incoming_arp->ar_ip_addr_len;
 		reply_arp->ar_op = htons(arp_op_reply);
-		memcpy(reply_arp->ar_src_mac, sr_get_interface(sr, incoming_interface)->mac, 6);
+		memcpy(reply_arp->ar_src_mac, incoming_info->mac, 6);
 		reply_arp->ar_src_ip = incoming_info->ip;
 		memcpy(reply_arp->ar_dest_mac, incoming_arp->ar_src_mac, 6);
 		reply_arp->ar_dest_ip = incoming_arp->ar_src_ip;
 
 		/*Print what's in the reply before sending it*/
-		printf("the reply\n");
+		printf("the arp request reply\n");
 		print_hdrs(reply, reply_size);
 
 		/*send it*/
@@ -212,7 +212,7 @@ void handle_arp(struct sr_instance* sr, uint8_t * incoming_packet, unsigned int 
 }
 
 /* Takes an IP packet and deals with it */
-void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char* interface, bool flag) {
+void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char* interface) {
     
     /* REQUIRES */
     assert(sr);
@@ -250,7 +250,7 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
         node = node->next;
     }
     
-    if (flag) {
+
         if (ip_header->ip_ttl > 1) {
             fprintf(stdout, "TTL Decremented\n");
             ip_header->ip_ttl = ip_header->ip_ttl - 1;
@@ -261,7 +261,7 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
             fprintf(stdout, "TTL EXCEEDED!!!!!!!!!!!!!!!!\n");
             send_icmp(sr, interface, packet, ip_header,len, ICMP_TIME_EXCEEDED, ICMP_ECHO_REPLY);
         }
-    }
+
 
 
 
@@ -338,8 +338,8 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
                 free(entry);
             } else {
                 fprintf(stdout,"ARP Cache miss\n");
-                sr_arpcache_queuereq(&(sr->cache), ip_header->ip_dst, packet, len, interface);
-                
+                struct sr_arpreq *request = sr_arpcache_queuereq(&(sr->cache), ip_header->ip_dst, packet, len, prefix_match->interface);
+                handle_qreq(sr, request);
             }
         } else {
             fprintf(stdout,"No match. Sending ICMP net unreachable...\n");
@@ -471,7 +471,8 @@ void send_icmp(struct sr_instance* sr, char* interface, uint8_t * packet, sr_ip_
             sr_send_packet (sr, response_packet, size, interface);
             free(response_packet);
         } else {
-              sr_arpcache_queuereq(&sr->cache, response_ip_header->ip_dst, packet, len, interface);
+        	struct sr_arpreq *request = sr_arpcache_queuereq(&sr->cache, response_ip_header->ip_dst, response_packet, len, interface);
+        	handle_qreq(sr, request);
         }
         
 
