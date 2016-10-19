@@ -260,6 +260,7 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
         else{
             fprintf(stdout, "TTL EXCEEDED!!!!!!!!!!!!!!!!\n");
             send_icmp(sr, interface, packet, ip_header,len, ICMP_TIME_EXCEEDED, ICMP_ECHO_REPLY);
+			return;
         }
 
 
