@@ -15,7 +15,7 @@
 #include <assert.h>
 #include <stdlib.h>
 #include <string.h>
-
+#include <stdbool.h>
 
 #include "sr_if.h"
 #include "sr_rt.h"
@@ -94,7 +94,7 @@ void sr_handlepacket(struct sr_instance* sr,
      if (ethernet_type == ethertype_arp){
         
         fprintf(stdout,"ARP Packet Received\n");
-        handle_arp(sr, packet, len, ever_pointed);
+        handle_arp(sr, packet, len, ever_pointed, false);
     }
      else if (ethernet_type == ethertype_ip){
          
@@ -115,7 +115,7 @@ void sr_handlepacket(struct sr_instance* sr,
  Make another file for it?*/
 
 /* Takes an ARP packet and deals with it */
-void handle_arp(struct sr_instance* sr, uint8_t * incoming_packet, unsigned int incoming_len, char* incoming_interface)
+void handle_arp(struct sr_instance* sr, uint8_t * incoming_packet, unsigned int incoming_len, char* incoming_interface, bool is_initiative)
 {
 	/*easy references to the incoming packet internals*/
     sr_ethernet_hdr_t *incoming_eth = (sr_ethernet_hdr_t*) incoming_packet;
@@ -158,7 +158,7 @@ void handle_arp(struct sr_instance* sr, uint8_t * incoming_packet, unsigned int 
 							sr_ethernet_hdr_t *backlog_eheader = (sr_ethernet_hdr_t*)backlog_packet->buf;
 							if (ntohs(backlog_eheader->ether_type == ethertype_ip))
 							{
-								handle_arp(sr, backlog_packet->buf, backlog_packet->len, backlog_packet->iface);
+								handle_arp(sr, backlog_packet->buf, backlog_packet->len, backlog_packet->iface, false);
 							}
 							else /*if(ntohs(orig_eheader->ether_type = ethertype_arp))*/
 							{
@@ -217,8 +217,13 @@ void handle_arp(struct sr_instance* sr, uint8_t * incoming_packet, unsigned int 
 					sr_send_packet(sr, arp_broadcast, arp_broadcast_size, broadcast_rt->interface);
 					free(arp_broadcast);
 
-	    		/*after the spam has been sent out, Q the request*/
-	            sr_arpcache_queuereq(&sr->cache, incoming_arp->ar_dest_ip, incoming_packet, incoming_len, incoming_interface);
+	    		/*only add to the Q and take the initiative to try the arp request if this round of handle_arp isn't the initiative*/
+				/*otherwise you get an infinite loop of cache fail --> take initiative --> send arp --> cache fail etc.*/
+				if(!is_initiative)
+				{
+					prepare_arp(sr, incoming_packet, incoming_len, incoming_interface);
+		            sr_arpcache_queuereq(&sr->cache, incoming_arp->ar_dest_ip, incoming_packet, incoming_len, incoming_interface);
+				}
 	            return;
 	    	}
     	}
@@ -227,10 +232,13 @@ void handle_arp(struct sr_instance* sr, uint8_t * incoming_packet, unsigned int 
 		int reply_size = sizeof(sr_ethernet_hdr_t) + sizeof(sr_arp_hdr_t);
 		uint8_t *reply = malloc(reply_size);
 
+		/*get info about the outgoing interface because arp requests come from the router*/
+		struct sr_if *outgoing_info = sr_get_interface(sr, incoming_interface);
+
 		/*Assemble ethernet header.*/
 		sr_ethernet_hdr_t *reply_eheader = (sr_ethernet_hdr_t*) reply;
 		memcpy(reply_eheader->ether_dhost, incoming_eth->ether_shost, 6);
-		memcpy(reply_eheader->ether_shost, dest_mac, 6);
+		memcpy(reply_eheader->ether_shost, outgoing_info->mac, 6);
 		reply_eheader->ether_type = incoming_eth->ether_type;
 
 		/* Assemble arp header*/
@@ -241,8 +249,8 @@ void handle_arp(struct sr_instance* sr, uint8_t * incoming_packet, unsigned int 
 		reply_arp->ar_ip_addr_len = incoming_arp->ar_ip_addr_len;
 		reply_arp->ar_op = htons(arp_op_reply);
 		memcpy(reply_arp->ar_src_mac, dest_mac, 6);
-		reply_arp->ar_src_ip = incoming_arp->ar_dest_ip;
-		memcpy(reply_arp->ar_dest_mac, incoming_arp->ar_src_mac, 6);
+		reply_arp->ar_src_ip = outgoing_info->ip;
+		memcpy(reply_arp->ar_src_mac, outgoing_info->mac, 6);
 		reply_arp->ar_dest_ip = incoming_arp->ar_src_ip;
 
 		/*Print what's in the reply before sending it*/
@@ -275,7 +283,7 @@ void handle_arp(struct sr_instance* sr, uint8_t * incoming_packet, unsigned int 
 				sr_ethernet_hdr_t *backlog_eheader = (sr_ethernet_hdr_t*)(backlog_packet->buf);
 				if (ntohs(backlog_eheader->ether_type == ethertype_ip))
 				{
-					handle_arp(sr, backlog_packet->buf, backlog_packet->len, backlog_packet->iface);
+					handle_arp(sr, backlog_packet->buf, backlog_packet->len, backlog_packet->iface, false);
 				}
 				else /*if(ntohs(orig_eheader->ether_type = ethertype_arp))*/
 				{
@@ -414,6 +422,7 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
                 free(entry);
             } else {
                 fprintf(stdout,"ARP Cache miss\n");
+                prepare_arp(sr, packet, len, interface);
                 sr_arpcache_queuereq(&(sr->cache), ip_header->ip_dst, packet, len, interface);
                 
             }
@@ -547,6 +556,7 @@ void send_icmp(struct sr_instance* sr, char* interface, uint8_t * packet, sr_ip_
             sr_send_packet (sr, response_packet, size, interface);
             free(response_packet);
         } else {
+        	prepare_arp(sr, packet, len, interface);
               sr_arpcache_queuereq(&sr->cache, response_ip_header->ip_dst, packet, len, interface);
         }
         
@@ -558,4 +568,60 @@ void send_icmp(struct sr_instance* sr, char* interface, uint8_t * packet, sr_ip_
     free(response_packet);
     }
 
+}
+
+/*generates an arp request for the packet and asks handle_arp to take care of it*/
+/*allows for immediate try to find ip/mac mapping*/
+void prepare_arp(struct sr_instance *sr, uint8_t *packet, int length, char *interface)
+{
+	   sr_ethernet_hdr_t *eth_header = (sr_ethernet_hdr_t*)packet;
+	   uint8_t mac_unknown[6] = {0, 0, 0, 0, 0, 0};
+
+	   /*get source and destination based on packet type*/
+	   uint32_t source = 0, dest = 0;
+	   if(ntohs(eth_header->ether_type) == ethertype_ip)
+	   {
+		   sr_ip_hdr_t *orig_ipheader = (sr_ip_hdr_t*)(packet + sizeof(sr_ethernet_hdr_t));
+		   source = orig_ipheader->ip_src;
+		   dest = orig_ipheader->ip_dst;
+	   }
+	   else /*if(ntohs(orig_eheader->ether_type) = ethertype_arp)*/
+	   {
+		   sr_arp_hdr_t *orig_arpheader = (sr_arp_hdr_t*)(packet + sizeof(sr_ethernet_hdr_t));
+		   source = orig_arpheader->ar_src_ip;
+		   dest = orig_arpheader->ar_dest_ip;
+	   }
+
+	   /**
+	   	   The source of this request IS WRONG. That's ok. This function isn't doing longest prefix
+	   	   match. handle_arp which is called at the end will fix up this arp request before sending it
+	    */
+	   int arp_request_size = sizeof(sr_ethernet_hdr_t) + sizeof(sr_arp_hdr_t);
+	   uint8_t *arp_request = malloc(arp_request_size);
+	   sr_ethernet_hdr_t *request_eheader = (sr_ethernet_hdr_t*)arp_request;
+	   sr_arp_hdr_t *request_aheader = (sr_arp_hdr_t*)(arp_request + sizeof(sr_ethernet_hdr_t));
+
+	   /*copy the ethernet header*/
+	   memcpy(request_eheader, eth_header, sizeof(sr_ethernet_hdr_t));
+	   uint8_t mac_broadcast[6] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
+	   memcpy(request_eheader->ether_dhost, mac_broadcast, 6); /*make sure it is sent to the broadcast mac*/
+	   request_eheader->ether_type = htons(ethertype_arp);
+
+	   /*make the arp request*/
+	   request_aheader->ar_hardware_type = htons(arp_hdr_ethernet);
+	   request_aheader->ar_protocol_type = htons(arp_hdr_ip);
+	   request_aheader->ar_mac_addr_len = 6;
+	   request_aheader->ar_ip_addr_len = 4;
+	   request_aheader->ar_op = htons(arp_op_request);
+	   memcpy(request_aheader->ar_src_mac, eth_header->ether_shost, 6);
+	   request_aheader->ar_src_ip = source;
+	   memcpy(request_aheader->ar_dest_mac, mac_unknown, 6);
+	   request_aheader->ar_dest_ip = dest;
+
+	   printf("helper function arp request headers\n");
+	   print_hdrs(arp_request, arp_request_size);
+
+	   /*send the arp request for the first packet from the interface it came from*/
+	   handle_arp(sr, arp_request, arp_request_size, interface, true);
+	   free(arp_request);
 }

@@ -102,60 +102,7 @@ void sr_arpcache_sweepreqs(struct sr_instance *sr)
 		   request->times_sent++;
 
 		   struct sr_packet *first_packet = request->packets;
-		   sr_ethernet_hdr_t *first_eheader = (sr_ethernet_hdr_t*)first_packet->buf;
-		   uint8_t mac_unknown[6] = {0, 0, 0, 0, 0, 0};
-
-		   /*get source and destination based on packet type*/
-		   uint32_t source = 0, dest = 0;
-		   if(ntohs(first_eheader->ether_type) == ethertype_ip)
-		   {
-			   sr_ip_hdr_t *orig_ipheader = (sr_ip_hdr_t*)(first_packet->buf + sizeof(sr_ethernet_hdr_t));
-			   source = orig_ipheader->ip_src;
-			   dest = orig_ipheader->ip_dst;
-		   }
-		   else /*if(ntohs(orig_eheader->ether_type = ethertype_arp))*/
-		   {
-			   sr_arp_hdr_t *orig_arpheader = (sr_arp_hdr_t*)(first_packet->buf + sizeof(sr_ethernet_hdr_t));
-			   source = orig_arpheader->ar_src_ip;
-			   dest = orig_arpheader->ar_dest_ip;
-		   }
-
-		   /**
-		    * This request is actually for the first packet. While each ip packet in this arp request is for
-		    * the same destination they could all have different sources. However a source must be filled in for
-		    * the request. Therefore the response will be for the first packet in the requests. HOWEVER, the other
-		    * packets in the request will be answered by sr_handlepacket because when the ip/mac pairing is inserted
-		    * into the cache, sr_handlepacket will get the packet Q waiting for this pairing. sr_handlepacket will
-		    * then proceed to sending out all the rest of the answers.
-		    */
-		   int arp_request_size = sizeof(sr_ethernet_hdr_t) + sizeof(sr_arp_hdr_t);
-		   uint8_t *arp_request = malloc(arp_request_size);
-		   sr_ethernet_hdr_t *request_eheader = (sr_ethernet_hdr_t*)arp_request;
-		   sr_arp_hdr_t *request_aheader = (sr_arp_hdr_t*)(arp_request + sizeof(sr_ethernet_hdr_t));
-
-		   /*copy the ethernet header*/
-		   memcpy(request_eheader, first_eheader, sizeof(sr_ethernet_hdr_t));
-		   uint8_t mac_broadcast[6] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
-		   memcpy(request_eheader->ether_dhost, mac_broadcast, 6); /*make sure it is sent to the broadcast mac*/
-		   request_eheader->ether_type = htons(ethertype_arp);
-
-		   /*make the arp request*/
-		   request_aheader->ar_hardware_type = htons(arp_hdr_ethernet);
-		   request_aheader->ar_protocol_type = htons(arp_hdr_ip);
-		   request_aheader->ar_mac_addr_len = 6;
-		   request_aheader->ar_ip_addr_len = 4;
-		   request_aheader->ar_op = htons(arp_op_request);
-		   memcpy(request_aheader->ar_src_mac, first_eheader->ether_shost, 6);
-		   request_aheader->ar_src_ip = source;
-		   memcpy(request_aheader->ar_dest_mac, mac_unknown, 6);
-		   request_aheader->ar_dest_ip = dest;
-
-		   printf("sweepreqs request headers\n");
-		   print_hdrs(arp_request, arp_request_size);
-
-		   /*send the arp request for the first packet from the interface it came from*/
-		   handle_arp(sr, arp_request, arp_request_size, first_packet->iface);
-		   free(arp_request);
+		   prepare_arp(sr, first_packet->buf, first_packet->len, first_packet->iface);
 	   }
 	   else
 	   {
