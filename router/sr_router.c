@@ -191,13 +191,14 @@ void handle_arp(struct sr_instance* sr, uint8_t * incoming_packet, unsigned int 
 		/*only process the backlog if there is one. otherwise backlog->packet will give a memory read exception*/
 		if(arp_reply_backlog != NULL)
 		{
-			/*process the backlog of packets based on its type*/
+			/*process the backlog of packets*/
 			struct sr_packet *backlog_packet = arp_reply_backlog->packets;
 			while (backlog_packet != NULL)
 			{
 				sr_ethernet_hdr_t *backlog_eheader = (sr_ethernet_hdr_t*)(backlog_packet->buf);
 				memcpy(backlog_eheader->ether_dhost, incoming_arp->ar_src_mac, 6);
-				memcpy(backlog_eheader->ether_shost, sr_get_interface(sr, backlog_packet->iface), 6)
+				memcpy(backlog_eheader->ether_shost, sr_get_interface(sr, backlog_packet->iface), 6);
+
 				printf("sending out backlog packet: \n");
 				print_hdrs(backlog_packet->buf, backlog_packet->len);
 				sr_send_packet(sr, backlog_packet->buf, backlog_packet->len, backlog_packet->iface);
@@ -337,7 +338,6 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
                 free(entry);
             } else {
                 fprintf(stdout,"ARP Cache miss\n");
-                prepare_arp(sr, packet, len, interface);
                 sr_arpcache_queuereq(&(sr->cache), ip_header->ip_dst, packet, len, interface);
                 
             }
@@ -471,7 +471,6 @@ void send_icmp(struct sr_instance* sr, char* interface, uint8_t * packet, sr_ip_
             sr_send_packet (sr, response_packet, size, interface);
             free(response_packet);
         } else {
-        	prepare_arp(sr, packet, len, interface);
               sr_arpcache_queuereq(&sr->cache, response_ip_header->ip_dst, packet, len, interface);
         }
         
@@ -555,14 +554,14 @@ void handle_qreq(struct sr_instance *sr, struct sr_arpreq *request)
 					memcpy(fail_eheader->ether_shost, sr_get_interface(sr, best_match->interface)->mac, 6);
 
 					print_hdrs(fail, fail_length);
-					send_packet(sr, fail, fail_length, best_match->interface);
+					sr_send_packet(sr, fail, fail_length, best_match->interface);
 					free(fail);
 				}
 				else
 				{
-					printf("no cache entry on the exit point");
-					struct sr_arpreq *request = sr_srpcache_queuereq(&(sr->cache), orig_ipheader->ip_src, fail, fail_length, best_match->interface);
-					sr_handlearpreq(sr, request);
+					printf("no cache entry on the sender");
+					struct sr_arpreq *request = sr_arpcache_queuereq(&(sr->cache), orig_ipheader->ip_src, fail, fail_length, best_match->interface);
+					handle_qreq(sr, request);
 				}
 			}
 			else
