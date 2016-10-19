@@ -84,7 +84,6 @@ void sr_handlepacket(struct sr_instance* sr,
 
     /* Ethernet Header */
     sr_ethernet_hdr_t *eth_hdr = (sr_ethernet_hdr_t*) packet;
-    print_hdr_eth((uint8_t *)eth_hdr);
     char *ever_pointed = ever_pointer(sr, interface);
     
     uint16_t ethernet_type = ethertype((uint8_t*) eth_hdr);
@@ -182,6 +181,7 @@ void handle_arp(struct sr_instance* sr, uint8_t * incoming_packet, unsigned int 
     else if (ntohs(incoming_arp->ar_op) == arp_op_reply)
     {
     	printf("got an incoming arp reply\n");
+    	print_hdrs(incoming_packet, incoming_len);
 
     	/*BLINDLY add it to the arp cache*/
 		struct sr_arpreq *arp_reply_backlog;
@@ -197,7 +197,7 @@ void handle_arp(struct sr_instance* sr, uint8_t * incoming_packet, unsigned int 
 			{
 				sr_ethernet_hdr_t *backlog_eheader = (sr_ethernet_hdr_t*)(backlog_packet->buf);
 				memcpy(backlog_eheader->ether_dhost, incoming_arp->ar_src_mac, 6);
-				memcpy(backlog_eheader->ether_shost, sr_get_interface(sr, backlog_packet->iface), 6);
+				memcpy(backlog_eheader->ether_shost, sr_get_interface(sr, backlog_packet->iface)->mac, 6);
 
 				printf("sending out backlog packet: \n");
 				print_hdrs(backlog_packet->buf, backlog_packet->len);
