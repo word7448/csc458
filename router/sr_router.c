@@ -281,7 +281,47 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
             case ip_protocol_udp:
                 
                 fprintf(stdout,"Recieved TCP or UDP Packet. Sending 'ICMP: Port Unreachable' to Source. \n");
-                send_icmp(sr, interface, packet, ip_header, len, ICMP_UNREACHABLE, ICMP_UNREACHABLE);
+                /*send_icmp(sr, interface, packet, ip_header, len, ICMP_UNREACHABLE, ICMP_UNREACHABLE);*/
+                
+                int size = sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_t3_hdr_t);
+                uint8_t *response_packet = malloc(size);
+                
+                sr_ethernet_hdr_t *ethernet_hdr = malloc(sizeof(sr_ethernet_hdr_t));
+                memcpy(ethernet_hdr, (sr_ethernet_hdr_t *) packet, sizeof(sr_ethernet_hdr_t));
+                
+                /* Make ethernet header */
+                sr_ethernet_hdr_t *response_ethernet_header = (sr_ethernet_hdr_t *)response_packet;
+                memcpy(response_ethernet_header->ether_dhost, ethernet_hdr->ether_shost, sizeof(sr_ethernet_hdr_t));
+                memcpy(response_ethernet_header->ether_shost, sr_get_interface(sr, interface)->mac, sizeof(sr_ethernet_hdr_t));
+                response_ethernet_header->ether_type = htons(ethertype_ip);
+                
+                
+                /* Make IP header */
+                sr_ip_hdr_t *response_ip_header = (sr_ip_hdr_t *)(response_packet + sizeof(sr_ethernet_hdr_t));
+                response_ip_header->ip_v = 4;
+                response_ip_header->ip_hl = sizeof(sr_ip_hdr_t)/4;
+                response_ip_header->ip_tos = 0;
+                response_ip_header->ip_len = htons(sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_t3_hdr_t));
+                response_ip_header->ip_id = htons(0);
+                response_ip_header->ip_off = htons(IP_DF);
+                response_ip_header->ip_ttl = 64;
+                response_ip_header->ip_dst = ip_header->ip_src;
+                response_ip_header->ip_p = ip_protocol_icmp;
+                response_ip_header->ip_src = node->ip;
+                response_ip_header->ip_sum = 0;
+                response_ip_header->ip_sum = cksum(response_ip_header, sizeof(sr_ip_hdr_t));
+                
+                /* Make ICMP Header */
+                sr_icmp_t3_hdr_t *response_icmp_header = (sr_icmp_t3_hdr_t *)(response_packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
+                response_icmp_header->icmp_type = ICMP_UNREACHABLE;
+                response_icmp_header->icmp_code = 3;
+                response_icmp_header->unused = 0;
+                response_icmp_header->next_mtu = 0;
+                memcpy(response_icmp_header->data, ip_header, ICMP_DATA_SIZE);
+                response_icmp_header->icmp_sum = 0;
+                response_icmp_header->icmp_sum = cksum(response_icmp_header, sizeof(sr_icmp_t3_hdr_t));
+                sr_send_packet(sr, response_packet, len, interface);
+
                 
                 break;
                 
@@ -461,6 +501,16 @@ void send_icmp(struct sr_instance* sr, char* interface, uint8_t * packet, sr_ip_
 		memcpy(response_icmp_header->data, ip_header, ICMP_DATA_SIZE);
 		response_icmp_header->icmp_sum = cksum(response_icmp_header, sizeof(sr_icmp_t3_hdr_t));
 	}
+	else if (type == ICMP_TIME_EXCEEDED) {
+		sr_icmp_t3_hdr_t *response_icmp_header = (sr_icmp_t3_hdr_t *)(response_packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
+		response_icmp_header->icmp_type = ICMP_TIME_EXCEEDED;
+		response_icmp_header->icmp_code = code;
+		response_icmp_header->unused = 0;
+		response_icmp_header->next_mtu = 0;
+		response_icmp_header->icmp_sum = 0;
+		memcpy(response_icmp_header->data, ip_header, ICMP_DATA_SIZE);
+		response_icmp_header->icmp_sum = cksum(response_icmp_header, sizeof(sr_icmp_t3_hdr_t));
+	}
 	else
 	{
 		sr_icmp_hdr_t *response_icmp_header = (sr_icmp_hdr_t *)(response_packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
@@ -481,7 +531,7 @@ void send_icmp(struct sr_instance* sr, char* interface, uint8_t * packet, sr_ip_
             sr_send_packet (sr, response_packet, size, interface);
             free(response_packet);
         } else {
-        	struct sr_arpreq *request = sr_arpcache_queuereq(&sr->cache, response_ip_header->ip_dst, response_packet, len, interface);
+        	struct sr_arpreq *request = sr_arpcache_queuereq(&sr->cache, response_ip_header->ip_dst, response_packet, size, interface);
         	handle_qreq(sr, request);
         }
         
