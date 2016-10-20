@@ -208,6 +208,10 @@ void handle_arp(struct sr_instance* sr, uint8_t * incoming_packet, unsigned int 
 			/*backlog has been completed, get rid of this request*/
 			sr_arpreq_destroy(&(sr->cache), arp_reply_backlog);
 		}
+		else
+		{
+			printf("no backlog to process\n");
+		}
     }
 }
 
@@ -544,14 +548,19 @@ void send_icmp(struct sr_instance* sr, char* interface, uint8_t * packet, sr_ip_
 /*generates an arp request for the packet and asks handle_arp to take care of it*/
 void handle_qreq(struct sr_instance *sr, struct sr_arpreq *request)
 {
+	printf("handling arp request\n");
 	time_t now = time(NULL); /*DT* in seconds since new years 1970*/
 	time_t diff = now - request->sent; /*OH* supposed to be "now -" not "now =" right? */
 
 	if (request->times_sent >= 5)
 	{
+		printf("request has exceeded 5x limit\n");
 		struct sr_packet *failed_packet = request->packets;
 		while (failed_packet != NULL)
 		{
+			printf("mailing out failure for packet: \n");
+			print_hdrs(failed_packet->buf, failed_packet->len);
+
 			/*get the ip of the failed packet based on whether it's ip or arp*/
 			sr_ethernet_hdr_t *orig_eheader = (sr_ethernet_hdr_t*) failed_packet->buf;
 			sr_ip_hdr_t *orig_ipheader = (sr_ip_hdr_t*) (failed_packet->buf + sizeof(sr_ethernet_hdr_t));
@@ -611,13 +620,14 @@ void handle_qreq(struct sr_instance *sr, struct sr_arpreq *request)
 					memcpy(fail_eheader->ether_dhost, sender->mac, 6);
 					memcpy(fail_eheader->ether_shost, sr_get_interface(sr, best_match->interface)->mac, 6);
 
+					printf("failure to be mailed out:\n");
 					print_hdrs(fail, fail_length);
 					sr_send_packet(sr, fail, fail_length, best_match->interface);
 					free(fail);
 				}
 				else
 				{
-					printf("no cache entry on the sender\n");
+					printf("no cache entry on the sender. wait for cache\n");
 					struct sr_arpreq *request = sr_arpcache_queuereq(&(sr->cache), orig_ipheader->ip_src, fail, fail_length, best_match->interface);
 					handle_qreq(sr, request);
 				}
@@ -638,6 +648,10 @@ void handle_qreq(struct sr_instance *sr, struct sr_arpreq *request)
 
 		struct sr_packet *first_packet = request->packets;
 		sr_ethernet_hdr_t *eth_header = (sr_ethernet_hdr_t*)first_packet->buf;
+
+		printf("sending out arp request for the first packet in the request list\n");
+		printf("first packet contents:\n");
+		print_hdrs(first_packet->buf, first_packet->len);
 
 		int arp_request_size = sizeof(sr_ethernet_hdr_t) + sizeof(sr_arp_hdr_t);
 		uint8_t *arp_request = malloc(arp_request_size);
