@@ -499,7 +499,7 @@ void send_icmp(struct sr_instance* sr, char* interface, uint8_t * packet, sr_ip_
 	}
 	else if (type == ICMP_TIME_EXCEEDED) {
 		sr_icmp_t3_hdr_t *response_icmp_header = (sr_icmp_t3_hdr_t *)(response_packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
-		response_icmp_header->icmp_type = ICMP_UNREACHABLE;
+		response_icmp_header->icmp_type = ICMP_TIME_EXCEEDED;
 		response_icmp_header->icmp_code = code;
 		response_icmp_header->unused = 0;
 		response_icmp_header->next_mtu = 0;
