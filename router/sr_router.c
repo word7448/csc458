@@ -206,6 +206,7 @@ void handle_arp(struct sr_instance* sr, uint8_t * incoming_packet, unsigned int 
 				backlog_packet = backlog_packet->next;
 			}
 			/*backlog has been completed, get rid of this request*/
+			printf("backlog pointer %p fulfilled\n", arp_reply_backlog);
 			sr_arpreq_destroy(&(sr->cache), arp_reply_backlog);
 		}
 		else
@@ -543,12 +544,13 @@ void send_icmp(struct sr_instance* sr, char* interface, uint8_t * packet, sr_ip_
 /*generates an arp request for the packet and asks handle_arp to take care of it*/
 void handle_qreq(struct sr_instance *sr, struct sr_arpreq *request)
 {
-	printf("handling arp request\n");
+	printf("handling arp request pointer %p\n", request);
 	time_t now = time(NULL); /*DT* in seconds since new years 1970*/
 	time_t diff = now - request->sent; /*OH* supposed to be "now -" not "now =" right? */
 
 	if (request->times_sent >= 5)
 	{
+		int doable = 0;
 		printf("request has exceeded 5x limit\n");
 		struct sr_packet *failed_packet = request->packets;
 		while (failed_packet != NULL)
@@ -557,7 +559,6 @@ void handle_qreq(struct sr_instance *sr, struct sr_arpreq *request)
 			print_hdrs(failed_packet->buf, failed_packet->len);
 
 			/*get the ip of the failed packet based on whether it's ip or arp*/
-			sr_ethernet_hdr_t *orig_eheader = (sr_ethernet_hdr_t*) failed_packet->buf;
 			sr_ip_hdr_t *orig_ipheader = (sr_ip_hdr_t*) (failed_packet->buf + sizeof(sr_ethernet_hdr_t));
 
 			/*DT*create icmp fail and make its internals easily accessible*/
@@ -596,8 +597,7 @@ void handle_qreq(struct sr_instance *sr, struct sr_arpreq *request)
 			fail_icmp->icmp_code = 1;
 			fail_icmp->unused = 0; /*DT* zero out to make sure old heap garbage doesn't screw this up */
 			fail_icmp->next_mtu = 0; /*DT* according to wikipedia, you only fill this in for code 4*/
-			bzero(fail_icmp->data, ICMP_DATA_SIZE);
-			memcpy(fail_icmp->data, fail_ipheader, sizeof(sr_ip_hdr_t));
+			memcpy(fail_icmp->data, orig_ipheader, ICMP_DATA_SIZE);
 			fail_icmp->icmp_sum = 0;
 			uint16_t icmp_checksum = cksum(fail_icmp, sizeof(sr_icmp_t3_hdr_t));
 			fail_icmp->icmp_sum = icmp_checksum;
@@ -609,7 +609,8 @@ void handle_qreq(struct sr_instance *sr, struct sr_arpreq *request)
 				struct sr_arpentry *sender = sr_arpcache_lookup(&(sr->cache), orig_ipheader->ip_src);
 				if(sender != NULL)
 				{
-					printf("sender info found");
+					printf("sender info found\n");
+					doable = 1;
 
 					/*set the ethernet header*/
 					memcpy(fail_eheader->ether_dhost, sender->mac, 6);
@@ -619,12 +620,15 @@ void handle_qreq(struct sr_instance *sr, struct sr_arpreq *request)
 					print_hdrs(fail, fail_length);
 					sr_send_packet(sr, fail, fail_length, best_match->interface);
 					free(fail);
+
+					failed_packet = failed_packet->next;
 				}
 				else
 				{
 					printf("no cache entry on the sender. wait for cache\n");
 					struct sr_arpreq *request = sr_arpcache_queuereq(&(sr->cache), orig_ipheader->ip_src, fail, fail_length, best_match->interface);
 					handle_qreq(sr, request);
+					break;
 				}
 			}
 			else
@@ -633,7 +637,16 @@ void handle_qreq(struct sr_instance *sr, struct sr_arpreq *request)
 			}
 
 		}
-		sr_arpreq_destroy(&(sr->cache), request); /*DT* this request is hopeless. failures have been sent. get rid of it*/
+		/*only remove the request if sender info was available to mail failures*/
+		if(doable)
+		{
+			printf("request pointer %p was doable\n", request);
+			sr_arpreq_destroy(&(sr->cache), request); /*DT* this request is hopeless. failures have been sent. get rid of it*/
+		}
+		else
+		{
+			printf("request pointer %p was NOT doable\n", request);
+		}
 	}
 	else if (diff >= 1)
 	{
@@ -642,7 +655,6 @@ void handle_qreq(struct sr_instance *sr, struct sr_arpreq *request)
 		request->times_sent++;
 
 		struct sr_packet *first_packet = request->packets;
-		sr_ethernet_hdr_t *eth_header = (sr_ethernet_hdr_t*)first_packet->buf;
 
 		printf("sending out arp request for the first packet in the request list\n");
 		printf("first packet contents:\n");
