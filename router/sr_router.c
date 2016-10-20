@@ -452,7 +452,7 @@ void send_icmp(struct sr_instance* sr, char* interface, uint8_t * packet, sr_ip_
     printf("************************************************************************ -> Received ICMP REQ with type %d and code %d \n", type,code);
     
 	int size = 0;
-	if (type == ICMP_UNREACHABLE) {
+	if ((type == ICMP_UNREACHABLE) || (type == ICMP_TIME_EXCEEDED)) {
 		size = sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_t3_hdr_t);
 	}
 	else {
