@@ -571,12 +571,7 @@ void handle_qreq(struct sr_instance *sr, struct sr_arpreq *request)
 			sr_ip_hdr_t *fail_ipheader = (sr_ip_hdr_t*) (fail + sizeof(sr_ethernet_hdr_t));
 			sr_icmp_t3_hdr_t *fail_icmp = (sr_icmp_t3_hdr_t*) (fail + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
 
-			/*DT*fill in ethernet header*/
-			/*
-			uint8_t *temp_mac = {0, 0, 0, 0, 0, 0};
-			memcpy(temp_mac, orig_eheader->ether_dhost);
-			memcpy(fail_eheader->ether_dhost, orig_eheader->ether_shost, 6);
-			memcpy(fail_eheader->ether_shost, temp_mac, 6);*/
+			/*DT*set ethernet header type. source/dest won't be known until going to the cache*/
 			fail_eheader->ether_type = htons(ethertype_ip);
 
 			/*DT*fill in ip header*/
