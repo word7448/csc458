@@ -497,6 +497,16 @@ void send_icmp(struct sr_instance* sr, char* interface, uint8_t * packet, sr_ip_
 		memcpy(response_icmp_header->data, ip_header, ICMP_DATA_SIZE);
 		response_icmp_header->icmp_sum = cksum(response_icmp_header, sizeof(sr_icmp_t3_hdr_t));
 	}
+	else if (type == ICMP_TIME_EXCEEDED) {
+		sr_icmp_t3_hdr_t *response_icmp_header = (sr_icmp_t3_hdr_t *)(response_packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
+		response_icmp_header->icmp_type = ICMP_UNREACHABLE;
+		response_icmp_header->icmp_code = code;
+		response_icmp_header->unused = 0;
+		response_icmp_header->next_mtu = 0;
+		response_icmp_header->icmp_sum = 0;
+		memcpy(response_icmp_header->data, ip_header, ICMP_DATA_SIZE);
+		response_icmp_header->icmp_sum = cksum(response_icmp_header, sizeof(sr_icmp_t3_hdr_t));
+	}
 	else
 	{
 		sr_icmp_hdr_t *response_icmp_header = (sr_icmp_hdr_t *)(response_packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
@@ -517,7 +527,7 @@ void send_icmp(struct sr_instance* sr, char* interface, uint8_t * packet, sr_ip_
             sr_send_packet (sr, response_packet, size, interface);
             free(response_packet);
         } else {
-        	struct sr_arpreq *request = sr_arpcache_queuereq(&sr->cache, response_ip_header->ip_dst, response_packet, len, interface);
+        	struct sr_arpreq *request = sr_arpcache_queuereq(&sr->cache, response_ip_header->ip_dst, response_packet, size, interface);
         	handle_qreq(sr, request);
         }
         
