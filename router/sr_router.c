@@ -452,9 +452,13 @@ void send_icmp(struct sr_instance* sr, char* interface, uint8_t * packet, sr_ip_
     printf("************************************************************************ -> Received ICMP REQ with type %d and code %d \n", type,code);
     
 	int size = 0;
-	if ((type == ICMP_UNREACHABLE) || (type == ICMP_TIME_EXCEEDED)) {
+	if (type == ICMP_UNREACHABLE) {
 		size = sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_t3_hdr_t);
 	}
+    
+    else if ( type == ICMP_TIME_EXCEEDED) {
+        size = sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_t11_hdr_t);
+    }
 	else {
 		size = sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_hdr_t);
 	}
@@ -475,7 +479,7 @@ void send_icmp(struct sr_instance* sr, char* interface, uint8_t * packet, sr_ip_
     response_ip_header->ip_v = 4;
     response_ip_header->ip_hl = sizeof(sr_ip_hdr_t)/4;
     response_ip_header->ip_tos = 0;
-    response_ip_header->ip_len = htons(sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_t3_hdr_t));
+    response_ip_header->ip_len = htons(sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_t11_hdr_t));
     response_ip_header->ip_id = htons(0);
     response_ip_header->ip_off = htons(IP_DF);
     response_ip_header->ip_ttl = 64;
@@ -498,11 +502,10 @@ void send_icmp(struct sr_instance* sr, char* interface, uint8_t * packet, sr_ip_
 		response_icmp_header->icmp_sum = cksum(response_icmp_header, sizeof(sr_icmp_t3_hdr_t));
 	}
 	else if (type == ICMP_TIME_EXCEEDED) {
-		sr_icmp_t3_hdr_t *response_icmp_header = (sr_icmp_t3_hdr_t *)(response_packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
+		sr_icmp_t11_hdr_t *response_icmp_header = (sr_icmp_t11_hdr_t *)(response_packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
 		response_icmp_header->icmp_type = ICMP_TIME_EXCEEDED;
 		response_icmp_header->icmp_code = code;
 		response_icmp_header->unused = 0;
-		response_icmp_header->next_mtu = 0;
 		response_icmp_header->icmp_sum = 0;
 		memcpy(response_icmp_header->data, ip_header, ICMP_DATA_SIZE);
 		response_icmp_header->icmp_sum = cksum(response_icmp_header, sizeof(sr_icmp_t3_hdr_t));
