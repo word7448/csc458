@@ -254,7 +254,6 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
         }
         node = node->next;
     }
-    
 
         if (ip_header->ip_ttl > 1) {
             fprintf(stdout, "TTL Decremented\n");
@@ -262,7 +261,11 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
             ip_header->ip_sum = 0;
             ip_header->ip_sum = cksum(ip_header, ip_header->ip_hl * 4);
         }
-        else{
+		else if (ip_header->ip_ttl == 1 && node) {
+			send_icmp(sr, interface, packet, ip_header, len, ICMP_ECHO_REPLY, ICMP_ECHO_REPLY);
+			return;
+		}
+        else {
             fprintf(stdout, "TTL EXCEEDED!!!!!!!!!!!!!!!!\n");
             send_icmp(sr, interface, packet, ip_header,len, ICMP_TIME_EXCEEDED, ICMP_ECHO_REPLY);
 			return;
