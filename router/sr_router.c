@@ -504,7 +504,7 @@ void send_icmp(struct sr_instance* sr, char* interface, uint8_t * packet, sr_ip_
 		response_icmp_header->next_mtu = 0;
 		response_icmp_header->icmp_sum = 0;
 		memcpy(response_icmp_header->data, ip_header, ICMP_DATA_SIZE);
-		response_icmp_header->icmp_sum = htons(cksum(response_icmp_header, sizeof(sr_icmp_t3_hdr_t)));
+		response_icmp_header->icmp_sum = cksum(response_icmp_header, sizeof(sr_icmp_t3_hdr_t));
 	}
 	else
 	{
