@@ -245,7 +245,7 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
         return;
     }
     
-    /* get packet interface*/
+    /* Try to short circuit processing if this packet is intended for router */
     struct sr_if *node = 0;
     node = sr->if_list;
     while(node){
@@ -270,6 +270,7 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
 			return;
         }
 
+	/* Packet destined for this router */
     if (node != NULL) {
         uint8_t ip_type = ip_protocol(packet + sizeof(sr_ethernet_hdr_t));
         /* Get ICMP header */
@@ -365,9 +366,16 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
         struct sr_rt *prefix_match = longest_prefix_match(sr, ip_header->ip_dst);
         
         if (prefix_match){
+			/* Prepare packet for sending */
             fprintf(stdout,"longest prefix match found\n");
             struct sr_arpentry *entry = sr_arpcache_lookup(&sr->cache, prefix_match->gw.s_addr);
-            
+			struct sr_if *interface = sr_get_interface(sr, prefix_match->interface);
+			print_addr_ip_int(prefix_match->gw.s_addr);
+			print_addr_eth(interface->mac);
+			print_addr_ip_int(interface->ip);
+			sr_ethernet_hdr_t *reply_ethernet_header = (sr_ethernet_hdr_t *)packet;
+			memcpy(reply_ethernet_header->ether_shost, sr_get_interface(sr, interface)->mac, sizeof(uint8_t)*ETHER_ADDR_LEN);
+
             if (entry){
                 struct sr_if *interface = sr_get_interface(sr, prefix_match->interface);
                 
@@ -393,6 +401,26 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
     
     }
     return;
+}
+
+/* Preps the L2 header and sends the packet */
+int pack_l2_and_ship(struct sr_instance *sr, void *packet, int len, struct sr_if *interface, unsigned char *dest_mac) {
+
+	sr_ethernet_hdr_t *ethernet_header = (sr_ethernet_hdr_t *)packet;
+
+	/* Make ethernet header */
+	sr_ethernet_hdr_t *reply_ethernet_header = (sr_ethernet_hdr_t *)packet;
+	memcpy(reply_ethernet_header->ether_dhost, dest_mac, sizeof(unsigned char) * 6);
+	reply_ethernet_header->ether_type = ethernet_header->ether_type;
+
+	print_hdrs(packet, len);
+	int result = sr_send_packet(sr, packet, len, interface->name);
+	if (result) {
+		fprintf(stderr, "Something went wrong with sending the packet after L2 packing\n");
+		return 1;
+	}
+
+	return 0;
 }
 
 /* Finds excuses to get rid of an IP packet */
