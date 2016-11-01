@@ -2,6 +2,7 @@
 /.project
 /.settings/
 /router/*.d
+/router/router.tar.gz
 /VisualGDBCache/csc458-Debug/SourceCache.dat
 /VisualGDBCache/csc458-Debug
 /release.mak
