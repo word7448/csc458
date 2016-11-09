@@ -22,7 +22,7 @@
 #include "sr_protocol.h"
 #include "sr_arpcache.h"
 #include "sr_utils.h"
-
+#include "sr_nat.h"
 
 /*Global*/
 int sanity_check(sr_ip_hdr_t *ipheader);
@@ -44,13 +44,29 @@ void sr_init(struct sr_instance* sr)
 	/* Initialize cache and cache cleanup thread */
 	sr_arpcache_init(&(sr->cache));
 
-	pthread_attr_init(&(sr->attr));
-	pthread_attr_setdetachstate(&(sr->attr), PTHREAD_CREATE_JOINABLE);
-	pthread_attr_setscope(&(sr->attr), PTHREAD_SCOPE_SYSTEM);
-	pthread_attr_setscope(&(sr->attr), PTHREAD_SCOPE_SYSTEM);
-	pthread_t thread;
+	pthread_attr_init(&(sr->arp_attr));
+	pthread_attr_setdetachstate(&(sr->arp_attr), PTHREAD_CREATE_JOINABLE);
+	pthread_attr_setscope(&(sr->arp_attr), PTHREAD_SCOPE_SYSTEM);
+	pthread_attr_setscope(&(sr->arp_attr), PTHREAD_SCOPE_SYSTEM);
+	pthread_t arp_thread;
 
-	pthread_create(&thread, &(sr->attr), sr_arpcache_timeout, sr);
+	pthread_create(&arp_thread, &(sr->arp_attr), sr_arpcache_timeout, sr);
+
+	/*initialize nat struct and its thread*/
+	if (sr->nat_mode)
+	{
+		bzero(&(sr->the_nat), sizeof(struct sr_nat));
+		sr_nat_init(sr->the_nat);
+
+		/* Initialize nat cleanup thread */
+		pthread_attr_init(&(sr->nat_attr));
+		pthread_attr_setdetachstate(&(sr->nat_attr), PTHREAD_CREATE_JOINABLE);
+		pthread_attr_setscope(&(sr->nat_attr), PTHREAD_SCOPE_SYSTEM);
+		pthread_attr_setscope(&(sr->nat_attr), PTHREAD_SCOPE_SYSTEM);
+		pthread_t nat_thread;
+
+		pthread_create(&nat_thread, &(sr->nat_attr), sr_nat_timeout, sr);
+	}
 } /* -- sr_init -- */
 
 /*---------------------------------------------------------------------
