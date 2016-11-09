@@ -43,7 +43,7 @@ struct sr_nat {
 
 int   sr_nat_init(struct sr_nat *nat);     /* Initializes the nat */
 int   sr_nat_destroy(struct sr_nat *nat);  /* Destroys the nat (free memory) */
-void *sr_nat_timeout(void *nat_ptr);  /* Periodic Timout */
+void *sr_nat_timeout(void *sr_ptr);  /* Periodic Timout */
 
 /* Get the mapping associated with given external port.
    You must free the returned structure if it is not NULL. */

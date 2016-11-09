@@ -3,6 +3,7 @@
 #include <assert.h>
 #include "sr_nat.h"
 #include <unistd.h>
+#include "sr_router.h"
 
 int sr_nat_init(struct sr_nat *nat) { /* Initializes the nat */
 
@@ -42,19 +43,22 @@ int sr_nat_destroy(struct sr_nat *nat) {  /* Destroys the nat (free memory) */
 
 }
 
-void *sr_nat_timeout(void *nat_ptr) {  /* Periodic Timout handling */
-  struct sr_nat *nat = (struct sr_nat *)nat_ptr;
-  while (1) {
-    sleep(1.0);
-    pthread_mutex_lock(&(nat->lock));
+void *sr_nat_timeout(void *sr_ptr)
+{ /* Periodic Timout handling */
+	struct sr_instance *sr = (struct sr_instance*)sr_ptr;
+	struct sr_nat *nat = (struct sr_nat*) sr->the_nat;
+	while (1)
+	{
+		sleep(1.0);
+		pthread_mutex_lock(&(nat->lock));
 
-    time_t curtime = time(NULL);
+		time_t curtime = time(NULL);
 
-    /* handle periodic tasks here */
+		/* handle periodic tasks here */
 
-    pthread_mutex_unlock(&(nat->lock));
-  }
-  return NULL;
+		pthread_mutex_unlock(&(nat->lock));
+	}
+	return NULL;
 }
 
 /* Get the mapping associated with given external port.
