@@ -373,8 +373,6 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
 			print_addr_ip_int(prefix_match->gw.s_addr);
 			print_addr_eth(interface->mac);
 			print_addr_ip_int(interface->ip);
-			sr_ethernet_hdr_t *reply_ethernet_header = (sr_ethernet_hdr_t *)packet;
-			memcpy(reply_ethernet_header->ether_shost, sr_get_interface(sr, interface)->mac, sizeof(uint8_t)*ETHER_ADDR_LEN);
 
             if (entry){
                 struct sr_if *interface = sr_get_interface(sr, prefix_match->interface);
