@@ -67,9 +67,13 @@ int main(int argc, char **argv)
     char *logfile = 0;
     struct sr_instance sr;
 
+    /*move up here to directly set nat and its timeouts. no need of keeping a temporary set of variables*/
+    /* -- zero out sr instance -- */
+    sr_init_instance(&sr);
+
     printf("Using %s\n", VERSION_INFO);
 
-    while ((c = getopt(argc, argv, "hs:v:p:u:t:r:l:T:")) != EOF)
+    while ((c = getopt(argc, argv, "hs:v:p:u:t:r:l:T:n:I:E:R")) != EOF)
     {
         switch (c)
         {
@@ -101,11 +105,21 @@ int main(int argc, char **argv)
             case 'T':
                 template = optarg;
                 break;
+            case 'n':
+            	sr.nat_mode = true;
+            	break;
+            case 'I':
+            	sr.icmp_ko = atoi((char*) optarg);
+            	break;
+            case 'E':
+            	sr.tcp_old_ko = atoi((char*) optarg);
+            	break;
+            case 'R':
+            	sr.tcp_new_ko = atoi((char*) optarg);
+            	break;
         } /* switch */
     } /* -- while -- */
 
-    /* -- zero out sr instance -- */
-    sr_init_instance(&sr);
 
     /* -- set up routing table from file -- */
     if(template == NULL) {
@@ -249,6 +263,12 @@ static void sr_init_instance(struct sr_instance* sr)
     sr->if_list = 0;
     sr->routing_table = 0;
     sr->logfile = 0;
+
+    /*to preset values in case they aren't supplied. if they aren't needed then no harm*/
+    sr->nat_mode = false;
+    sr->icmp_ko = 60;
+    sr->tcp_old_ko = 7440;
+    sr->tcp_new_ko = 300;
 } /* -- sr_init_instance -- */
 
 /*-----------------------------------------------------------------------------
