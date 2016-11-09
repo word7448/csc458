@@ -211,6 +211,50 @@ struct sr_arp_hdr
 } __attribute__ ((packed)) ;
 typedef struct sr_arp_hdr sr_arp_hdr_t;
 
+/*
+ * Structure of a TCP header
+ */
+struct sr_tcp_hdr
+{
+  uint16_t src_port;
+  uint16_t dst_port;
+  uint32_t seq_num;
+  uint32_t ack_num;
+
+  /*cram offset, reserved, ns flag into 1 8bit int
+   *we won't be fragmenting or messing with these fields so it's ok that
+   *none of these are easily accessible
+   */
+  uint8_t offset_reserved_ns;
+
+#if __BYTE_ORDER == __BIG_ENDIAN
+  unsigned int cwr:1; /* CWR */
+  unsigned int ece:1; /* ECE */
+  unsigned int urg:1; /* URG */
+  unsigned int ack:1; /* ACK */
+  unsigned int psh:1; /* PSH */
+  unsigned int rst:1; /* RST */
+  unsigned int syn:1; /* SYN */
+  unsigned int fin:1; /* FIN */
+/*https://en.wikipedia.org/wiki/Endianness*/
+#elif __BYTE_ORDER == __LITTLE_ENDIAN /*backwards bit order*/
+  unsigned int fin:1; /* FIN */
+  unsigned int syn:1; /* SYN */
+  unsigned int rst:1; /* RST */
+  unsigned int psh:1; /* PSH */
+  unsigned int ack:1; /* ACK */
+  unsigned int urg:1; /* URG */
+  unsigned int ece:1; /* ECE */
+  unsigned int cwr:1; /* CWR */
+#endif
+
+  uint16_t window_size;
+  uint16_t checksum;
+  uint16_t urgent;
+
+} __attribute__ ((packed)) ;
+typedef struct sr_tcp_hdr sr_tcp_hdr_t;
+
 #define sr_IFACE_NAMELEN 32
 
 #endif /* -- SR_PROTOCOL_H -- */
