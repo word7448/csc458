@@ -8,3 +8,4 @@
 /sr_rt.o
 /sr_utils.o
 /sr_vns_comm.o
+/sr_nat.o
