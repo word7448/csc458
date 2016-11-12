@@ -228,24 +228,24 @@ struct sr_tcp_hdr
   uint8_t offset_reserved_ns;
 
 #if __BYTE_ORDER == __BIG_ENDIAN
-  unsigned int cwr:1; /* CWR */
-  unsigned int ece:1; /* ECE */
-  unsigned int urg:1; /* URG */
-  unsigned int ack:1; /* ACK */
-  unsigned int psh:1; /* PSH */
-  unsigned int rst:1; /* RST */
-  unsigned int syn:1; /* SYN */
-  unsigned int fin:1; /* FIN */
+  uint32_t cwr:1; /* CWR */
+  uint32_t ece:1; /* ECE */
+  uint32_t urg:1; /* URG */
+  uint32_t ack:1; /* ACK */
+  uint32_t psh:1; /* PSH */
+  uint32_t rst:1; /* RST */
+  uint32_t syn:1; /* SYN */
+  uint32_t fin:1; /* FIN */
 /*https://en.wikipedia.org/wiki/Endianness*/
 #elif __BYTE_ORDER == __LITTLE_ENDIAN /*backwards bit order*/
-  unsigned int fin:1; /* FIN */
-  unsigned int syn:1; /* SYN */
-  unsigned int rst:1; /* RST */
-  unsigned int psh:1; /* PSH */
-  unsigned int ack:1; /* ACK */
-  unsigned int urg:1; /* URG */
-  unsigned int ece:1; /* ECE */
-  unsigned int cwr:1; /* CWR */
+  uint32_t fin:1; /* FIN */
+  uint32_t syn:1; /* SYN */
+  uint32_t rst:1; /* RST */
+  uint32_t psh:1; /* PSH */
+  uint32_t ack:1; /* ACK */
+  uint32_t urg:1; /* URG */
+  uint32_t ece:1; /* ECE */
+  uint32_t cwr:1; /* CWR */
 #endif
 
   uint16_t window_size;
