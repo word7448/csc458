@@ -81,7 +81,7 @@ void *sr_nat_timeout(void *nat_ptr)
 			{
 				untouched = false;
 				previous->next = current->next;
-				nat->port_taken[current->aux_ext] = false;
+				nat->port_taken[current->aux_ext+1024] = false;
 				free(current);
 				current = previous->next;
 			}
@@ -89,7 +89,7 @@ void *sr_nat_timeout(void *nat_ptr)
 			{
 				untouched = false;
 				previous->next = current->next;
-				nat->port_taken[current->aux_ext] = false;
+				nat->port_taken[current->aux_ext+1024] = false;
 				free(current);
 				current = previous->next;
 			}
