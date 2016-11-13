@@ -60,9 +60,6 @@ struct sr_instance
     /*A2 stuff*/
     /*timeout is too long, "to" means nothing, so knockout*/
     bool nat_mode;
-    int icmp_ko;
-    int tcp_old_ko;
-    int tcp_new_ko;
 
     /*nat thread timeout stuff*/
     pthread_attr_t nat_attr;

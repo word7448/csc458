@@ -70,6 +70,9 @@ int main(int argc, char **argv)
     /*move up here to directly set nat and its timeouts. no need of keeping a temporary set of variables*/
     /* -- zero out sr instance -- */
     sr_init_instance(&sr);
+    int icmp_ko = 60;
+    int tcp_old_ko = 7440;
+    int tcp_new_ko = 300;
 
     printf("Using %s\n", VERSION_INFO);
 
@@ -109,13 +112,13 @@ int main(int argc, char **argv)
             	sr.nat_mode = true;
             	break;
             case 'I':
-            	sr.icmp_ko = atoi((char*) optarg);
+            	icmp_ko = atoi((char*) optarg);
             	break;
             case 'E':
-            	sr.tcp_old_ko = atoi((char*) optarg);
+            	tcp_old_ko = atoi((char*) optarg);
             	break;
             case 'R':
-            	sr.tcp_new_ko = atoi((char*) optarg);
+            	tcp_new_ko = atoi((char*) optarg);
             	break;
         } /* switch */
     } /* -- while -- */
@@ -172,6 +175,15 @@ int main(int argc, char **argv)
 
     /* call router init (for arp subsystem etc.) */
     sr_init(&sr);
+
+    /*to only have 1 set of ko variables. do the nat init here.
+     * otherwise need to have one in sr_instance and then copy those over in sr_router's init
+     * to sr_nat. sr_nat.c/h CANNOT include sr_router.h because sr_router references sr_nat.h.
+     * otherwise there will be a circular include dependency of sr_nat.h references sr_router.h which references sr_nat.h...*/
+	if(sr.nat_mode)
+	{
+		sr_nat_init(&(sr.the_nat), icmp_ko, tcp_new_ko, tcp_old_ko);
+	}
 
     /* -- whizbang main loop ;-) */
     while( sr_read_from_server(&sr) == 1);
@@ -266,9 +278,6 @@ static void sr_init_instance(struct sr_instance* sr)
 
     /*to preset values in case they aren't supplied. if they aren't needed then no harm*/
     sr->nat_mode = false;
-    sr->icmp_ko = 60;
-    sr->tcp_old_ko = 7440;
-    sr->tcp_new_ko = 300;
 } /* -- sr_init_instance -- */
 
 /*-----------------------------------------------------------------------------

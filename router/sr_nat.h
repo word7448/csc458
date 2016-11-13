@@ -4,6 +4,7 @@
 #include <inttypes.h>
 #include <time.h>
 #include <pthread.h>
+#include <stdbool.h>
 
 typedef enum
 {
@@ -37,6 +38,10 @@ struct sr_nat
 {
 	/* add any fields here */
 	struct sr_nat_mapping *mappings;
+	bool port_taken[64511]; /*65535-1024*/
+    int icmp_ko;
+    int tcp_old_ko;
+    int tcp_new_ko;
 
 	/* threading */
 	pthread_mutex_t lock;
@@ -45,7 +50,7 @@ struct sr_nat
 	pthread_t thread;
 };
 
-int sr_nat_init(struct sr_nat *nat); /* Initializes the nat */
+int sr_nat_init(struct sr_nat *nat, int icmp_ko, int tcp_new_ko, int tcp_old_ko);
 int sr_nat_destroy(struct sr_nat *nat); /* Destroys the nat (free memory) */
 void *sr_nat_timeout(void *sr_ptr); /* Periodic Timout */
 

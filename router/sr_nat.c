@@ -2,13 +2,13 @@
 #include <assert.h>
 #include "sr_nat.h"
 #include <unistd.h>
-#include "sr_router.h"
+#include <stdlib.h>
 
-int sr_nat_init(struct sr_instance *sr)
+
+int sr_nat_init(struct sr_nat *nat, int icmp_ko, int tcp_new_ko, int tcp_old_ko)
 { /* Initializes the nat */
 
-	assert(sr);
-	struct sr_nat *nat = &(sr->the_nat);
+	assert(nat);
 
 	/* Acquire mutex lock */
 	pthread_mutexattr_init(&(nat->attr));
@@ -21,12 +21,21 @@ int sr_nat_init(struct sr_instance *sr)
 	pthread_attr_setdetachstate(&(nat->thread_attr), PTHREAD_CREATE_JOINABLE);
 	pthread_attr_setscope(&(nat->thread_attr), PTHREAD_SCOPE_SYSTEM);
 	pthread_attr_setscope(&(nat->thread_attr), PTHREAD_SCOPE_SYSTEM);
-	pthread_create(&(nat->thread), &(nat->thread_attr), sr_nat_timeout, sr);
+	pthread_create(&(nat->thread), &(nat->thread_attr), sr_nat_timeout, nat);
 
 	/* CAREFUL MODIFYING CODE ABOVE THIS LINE! */
 
 	nat->mappings = NULL;
-	/* Initialize any variables here */
+	nat->icmp_ko = icmp_ko;
+	nat->tcp_new_ko = tcp_new_ko;
+	nat->tcp_old_ko = tcp_old_ko;
+
+	/*nothing is taken at the begining*/
+	int i;
+	for(i=0; i<64511; i++)
+	{
+		nat->port_taken[i] = false;
+	}
 
 	return success;
 }
@@ -43,10 +52,9 @@ int sr_nat_destroy(struct sr_nat *nat)
 
 }
 
-void *sr_nat_timeout(void *sr_ptr)
+void *sr_nat_timeout(void *nat_ptr)
 { /* Periodic Timout handling */
-	struct sr_instance *sr = (struct sr_instance*) sr_ptr;
-	struct sr_nat *nat = (struct sr_nat*) sr->the_nat;
+	struct sr_nat *nat = (struct sr_nat*) nat_ptr;
 	while (1)
 	{
 		sleep(1.0);
@@ -54,27 +62,47 @@ void *sr_nat_timeout(void *sr_ptr)
 
 		time_t now = time(NULL);
 		time_t diff;
+		bool untouched = true;
 		
-		struct sr_nat_mapping current = sr->the_nat->mappings;
-		struct sr_nat_mapping previous = current;
+		struct sr_nat_mapping *current = nat->mappings;
+		struct sr_nat_mapping *previous = current;
 		
 		while (current != NULL)
 		{
 			diff = now - current->last_updated;
-			if((current->type == nat_mapping_icmp) && (diff % sr->icmp_ko == 0))
+			if((current->type == nat_mapping_icmp) && (diff % nat->icmp_ko == 0))
 			{
+				untouched = false;
+				previous->next = current->next;
+				free(current);
+				current = previous->next;
+			}
+			else if((current->type == nat_mapping_tcp_old) && (diff % nat->tcp_old_ko == 0))
+			{
+				untouched = false;
+				previous->next = current->next;
+				nat->port_taken[current->aux_ext] = false;
+				free(current);
+				current = previous->next;
+			}
+			else if((current->type == nat_mapping_tcp_new) && (diff % nat->tcp_new_ko == 0))
+			{
+				untouched = false;
+				previous->next = current->next;
+				nat->port_taken[current->aux_ext] = false;
+				free(current);
+				current = previous->next;
+			}
 
-			}
-			else if((current->type == nat_mapping_tcp_old) && (diff % sr->tcp_old_ko == 0))
+			/*only change both pointers if an entry was not removed.
+			 * if an entry was removed then when it goes, the removed entry's next
+			 * is the current. that means what is now "current" hasn't been inspected yet.
+			 * don't skip over what' in "current"*/
+			if(untouched)
 			{
-				
+				previous = current;
+				current = current->next;
 			}
-			else if((current->type == nat_mapping_tcp_new) && (diff % sr->tcp_new_ko == 0))
-			{
-				
-			}
-			previous = current;
-			current = current->next;
 		}
 
 		pthread_mutex_unlock(&(nat->lock));
@@ -90,10 +118,20 @@ struct sr_nat_mapping *sr_nat_lookup_external(struct sr_nat *nat, uint16_t aux_e
 	pthread_mutex_lock(&(nat->lock));
 
 	/* handle lookup here, malloc and assign to copy */
-	struct sr_nat_mapping *copy = NULL;
+	struct sr_nat_mapping *pointer = nat->mappings;
+
+	while(pointer != NULL)
+	{
+		if(pointer->aux_ext == aux_ext && pointer->type == type)
+		{
+			break;
+			/*probably can't just do return because you have to unlock nat->lock*/
+		}
+		pointer = pointer->next;
+	}
 
 	pthread_mutex_unlock(&(nat->lock));
-	return copy;
+	return pointer;
 }
 
 /* Get the mapping associated with given internal (ip, port) pair.
@@ -104,10 +142,19 @@ struct sr_nat_mapping *sr_nat_lookup_internal(struct sr_nat *nat, uint32_t ip_in
 	pthread_mutex_lock(&(nat->lock));
 
 	/* handle lookup here, malloc and assign to copy. */
-	struct sr_nat_mapping *copy = NULL;
+	struct sr_nat_mapping *pointer = nat->mappings;
 
+	while(pointer != NULL)
+	{
+		if(pointer->ip_int == ip_int && pointer->aux_int == aux_int && pointer->type == type)
+		{
+			break;
+			/*probably can't just do return because you have to unlock nat->lock*/
+		}
+		pointer = pointer->next;
+	}
 	pthread_mutex_unlock(&(nat->lock));
-	return copy;
+	return pointer;
 }
 
 /* Insert a new mapping into the nat's mapping table.
