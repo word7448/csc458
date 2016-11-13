@@ -66,7 +66,7 @@ struct sr_instance
 
     /*nat thread timeout stuff*/
     pthread_attr_t nat_attr;
-    struct sr_nat* the_nat;
+    struct sr_nat the_nat;
 };
 
 /* -- sr_main.c -- */
