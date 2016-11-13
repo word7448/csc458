@@ -77,7 +77,7 @@ void *sr_nat_timeout(void *nat_ptr)
 			{
 				untouched = false;
 				previous->next = current->next;
-				nat->icmp_seq_block_taken[(current->aux_ext)/100] = false; /*just chops off the last 2 #s to get the sequence block*/
+				nat->icmp_seq_block_taken[(current->aux_ext)/100+1] = false; /*just chops off the last 2 #s to get the sequence block*/
 				free(current);
 				current = previous->next;
 			}
