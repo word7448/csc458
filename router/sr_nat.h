@@ -6,6 +6,20 @@
 #include <pthread.h>
 #include <stdbool.h>
 
+#define USEABLE_PORTS 64511
+
+/*
+ * Allocate ping sequences in "blocks" of 100. Since global ping seq usage changes with EACH reply, to figure
+ * out if a sequence number is available you will need to update the sr_nat_mapping for every ping reply. (Annoying and error prone)
+ * There might be a condition where a BOTH a sequence number is needed for a new stream of pings (ex 2016)
+ * and an old ping stream reply was just send with seq 2016. If the new stream does the check first, it will see
+ * 2016 as available. Then when the old ping stream is sent out, it will be a duplicate 2016.
+ *
+ * Allocate ping seq #s in blocks of 100 in hopes to avoid the race condition above by making the assumption nobody
+ * will have a ping stream sequence of >100 pings. This way no sequences will overlap which means no need to update the usage table with each reply.
+ * Also allows for 655 concurrent ping streams which should be enough for this sr.
+ */
+#define USEABLE_PING_BLOCKS 655 /*0-654*/
 typedef enum
 {
 	nat_mapping_icmp,
@@ -38,7 +52,8 @@ struct sr_nat
 {
 	/* add any fields here */
 	struct sr_nat_mapping *mappings;
-	bool port_taken[64511]; /*65535-1024*/
+	bool port_taken[USEABLE_PORTS]; /*65535-1024*/
+	bool icmp_seq_block_taken[USEABLE_PING_BLOCKS];
     int icmp_ko;
     int tcp_old_ko;
     int tcp_new_ko;

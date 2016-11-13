@@ -32,11 +32,14 @@ int sr_nat_init(struct sr_nat *nat, int icmp_ko, int tcp_new_ko, int tcp_old_ko)
 
 	/*nothing is taken at the begining*/
 	int i;
-	for(i=0; i<64511; i++)
+	for(i=0; i<USEABLE_PORTS; i++)
 	{
 		nat->port_taken[i] = false;
 	}
-
+	for(i=0; i<USEABLE_PING_BLOCKS; i++)
+	{
+		nat->icmp_seq_block_taken[i] = false;
+	}
 	return success;
 }
 
@@ -74,6 +77,7 @@ void *sr_nat_timeout(void *nat_ptr)
 			{
 				untouched = false;
 				previous->next = current->next;
+				nat->icmp_seq_block_taken[(current->aux_ext)/100] = false; /*just chops off the last 2 #s to get the sequence block*/
 				free(current);
 				current = previous->next;
 			}
@@ -166,8 +170,34 @@ struct sr_nat_mapping *sr_nat_insert_mapping(struct sr_nat *nat, uint32_t ip_int
 
 	pthread_mutex_lock(&(nat->lock));
 
-	/* handle insert here, create a mapping, and then return a copy of it */
-	struct sr_nat_mapping *mapping = NULL;
+	int external;
+	if (type == nat_mapping_tcp_new) /*you're never going to be inserting an established/old tcp mapping*/
+	{
+		external = rand() % USEABLE_PORTS;
+		while (nat->port_taken[external])
+		{
+			external = rand() % USEABLE_PORTS;
+		}
+		external = external + 1024;
+	}
+	else if (type == nat_mapping_icmp)
+	{
+		external = rand() % USEABLE_PING_BLOCKS;
+		while (nat->icmp_seq_block_taken[external])
+		{
+			external = rand() % USEABLE_PING_BLOCKS;
+		}
+		external = external*100;
+	}
+
+	struct sr_nat_mapping *mapping = malloc(sizeof(struct sr_nat_mapping));
+	mapping->ip_int = ip_int;
+	mapping->aux_int = aux_int;
+	mapping->aux_ext = external;
+	mapping->type = type;
+	mapping->last_updated = time(NULL);
+	mapping->next = nat->mappings; /*put the new one at the front of the list*/
+	nat->mappings = mapping;
 
 	pthread_mutex_unlock(&(nat->lock));
 	return mapping;
