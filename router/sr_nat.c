@@ -187,7 +187,7 @@ struct sr_nat_mapping *sr_nat_insert_mapping(struct sr_nat *nat, uint32_t ip_int
 		{
 			external = rand() % USEABLE_PING_BLOCKS;
 		}
-		external = external*100;
+		external = external*100+1;
 	}
 
 	struct sr_nat_mapping *mapping = malloc(sizeof(struct sr_nat_mapping));
