@@ -7,7 +7,9 @@
 
 typedef enum
 {
-	nat_mapping_icmp, nat_mapping_tcp_old, nat_mapping_tcp_new
+	nat_mapping_icmp,
+	nat_mapping_tcp_old,
+	nat_mapping_tcp_new
 /* nat_mapping_udp, */
 } sr_nat_mapping_type;
 
