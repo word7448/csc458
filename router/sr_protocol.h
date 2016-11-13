@@ -105,6 +105,19 @@ struct sr_icmp_hdr {
 typedef struct sr_icmp_hdr sr_icmp_hdr_t;
 
 
+/* Structure of a ping ICMP header (type8 = request, type0 = reply)
+ */
+struct sr_icmp_tping_hdr {
+  uint8_t icmp_type;
+  uint8_t icmp_code;
+  uint16_t icmp_sum;
+  uint16_t identifier;
+  uint16_t sequence;
+  uint8_t data[ICMP_DATA_SIZE];
+
+} __attribute__ ((packed)) ;
+typedef struct sr_icmp_tping_hdr sr_icmp_tping_hdr_t;
+
 /* Structure of a type3 ICMP header
  */
 struct sr_icmp_t3_hdr {
