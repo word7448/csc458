@@ -103,6 +103,7 @@ void *sr_nat_timeout(void *nat_ptr)
 				previous = current;
 				current = current->next;
 			}
+			untouched = true;
 		}
 
 		pthread_mutex_unlock(&(nat->lock));
