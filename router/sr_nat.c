@@ -129,6 +129,7 @@ struct sr_nat_mapping *sr_nat_lookup_external(struct sr_nat *nat, uint16_t aux_e
 	{
 		if(pointer->aux_ext == aux_ext && pointer->type == type)
 		{
+			pointer->last_updated = time(NULL);
 			break;
 			/*probably can't just do return because you have to unlock nat->lock*/
 		}
@@ -153,6 +154,7 @@ struct sr_nat_mapping *sr_nat_lookup_internal(struct sr_nat *nat, uint32_t ip_in
 	{
 		if(pointer->ip_int == ip_int && pointer->aux_int == aux_int && pointer->type == type)
 		{
+			pointer->last_updated = time(NULL);
 			break;
 			/*probably can't just do return because you have to unlock nat->lock*/
 		}
