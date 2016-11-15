@@ -73,7 +73,7 @@ void *sr_nat_timeout(void *nat_ptr)
 		while (current != NULL)
 		{
 			diff = now - current->last_updated;
-			if((current->type == nat_mapping_icmp) && (diff % nat->icmp_ko == 0))
+			if((current->type == nat_mapping_icmp) && (diff > nat->icmp_ko))
 			{
 				untouched = false;
 				previous->next = current->next;
@@ -81,7 +81,7 @@ void *sr_nat_timeout(void *nat_ptr)
 				free(current);
 				current = previous->next;
 			}
-			else if((current->type == nat_mapping_tcp_old) && (diff % nat->tcp_old_ko == 0))
+			else if((current->type == nat_mapping_tcp_old) && (diff > nat->tcp_old_ko))
 			{
 				untouched = false;
 				previous->next = current->next;
@@ -89,7 +89,7 @@ void *sr_nat_timeout(void *nat_ptr)
 				free(current);
 				current = previous->next;
 			}
-			else if((current->type == nat_mapping_tcp_new) && (diff % nat->tcp_new_ko == 0))
+			else if((current->type == nat_mapping_tcp_new) && (diff > nat->tcp_new_ko))
 			{
 				untouched = false;
 				previous->next = current->next;
