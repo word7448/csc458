@@ -269,6 +269,14 @@ struct sr_tcp_hdr
 } __attribute__ ((packed)) ;
 typedef struct sr_tcp_hdr sr_tcp_hdr_t;
 
+struct sr_tcp_psuedo_hdr {
+    uint32_t ip_src, ip_dst; /* source and dest address */
+    uint8_t reserved;
+    uint8_t ip_p;
+    uint16_t tcp_len;
+} __attribute__ ((packed));
+typedef struct sr_tcp_psuedo_hdr sr_tcp_psuedo_hdr_t;
+
 #define sr_IFACE_NAMELEN 32
 
 #endif /* -- SR_PROTOCOL_H -- */

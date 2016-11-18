@@ -21,6 +21,43 @@ uint16_t cksum (const void *_data, int len) {
 }
 
 
+
+
+
+uint32_t tcp_cksum(sr_ip_hdr_t *ipHdr, sr_tcp_hdr_t *tcpHdr, int total_len) {
+    
+    uint8_t *full_tcp;
+    sr_tcp_psuedo_hdr_t *tcp_psuedo_hdr;
+    
+    int tcp_len = total_len - (sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
+    int full_tcp_len = sizeof(sr_tcp_psuedo_hdr_t) + tcp_len;
+    
+    tcp_psuedo_hdr = malloc(sizeof(sr_tcp_psuedo_hdr_t));
+    memset(tcp_psuedo_hdr, 0, sizeof(sr_tcp_psuedo_hdr_t));
+    
+    tcp_psuedo_hdr->ip_src = ipHdr->ip_src;
+    tcp_psuedo_hdr->ip_dst = ipHdr->ip_dst;
+    tcp_psuedo_hdr->ip_p = ipHdr->ip_p;
+    tcp_psuedo_hdr->tcp_len = htons(tcp_len);
+    
+    uint16_t currCksum = tcpHdr->checksum;
+    tcpHdr->checksum = 0;
+    
+    full_tcp = malloc(sizeof(sr_tcp_psuedo_hdr_t) + tcp_len);
+    memcpy(full_tcp, (uint8_t *) tcp_psuedo_hdr, sizeof(sr_tcp_psuedo_hdr_t));
+    memcpy(&(full_tcp[sizeof(sr_tcp_psuedo_hdr_t)]), (uint8_t *) tcpHdr, tcp_len);
+    tcpHdr->checksum = currCksum;
+    
+    uint16_t calcCksum = cksum(full_tcp, full_tcp_len);
+    
+    /* Clear out memory used for creation of complete tcp packet */
+    free(tcp_psuedo_hdr);
+    free(full_tcp);
+    
+    return calcCksum;
+}
+
+
 uint16_t ethertype(uint8_t *buf) {
   sr_ethernet_hdr_t *ehdr = (sr_ethernet_hdr_t *)buf;
   return ntohs(ehdr->ether_type);

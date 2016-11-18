@@ -70,7 +70,16 @@ struct sr_nat_mapping
 	struct sr_nat_connection *conns; /* list of connections. null for ICMP */
 	struct sr_nat_mapping *next;
 };
-
+struct sr_tcp_syn {
+    uint32_t ip_src;
+    uint16_t src_port;
+    time_t last_received;
+    
+    uint8_t *packet;
+    unsigned int len;
+    char *interface;
+    struct sr_tcp_syn *next;
+};
 struct sr_nat
 {
 	/* add any fields here */
@@ -80,6 +89,7 @@ struct sr_nat
     int icmp_ko;
     int tcp_old_ko;
     int tcp_new_ko;
+    struct sr_tcp_syn *incoming;
 
 	/* threading */
 	pthread_mutex_t lock;

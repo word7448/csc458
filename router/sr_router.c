@@ -27,6 +27,7 @@
 /*Global*/
 int sanity_check(sr_ip_hdr_t *ipheader);
 struct sr_rt *longest_prefix_match(struct sr_instance *sr, uint32_t ipdest);
+struct sr_nat_connection *sr_nat_insert_tcp_con(struct sr_nat_mapping *mapping, uint32_t ip_con);
 
 /*---------------------------------------------------------------------
  * Method: sr_init(void)
@@ -52,9 +53,9 @@ void sr_init(struct sr_instance* sr)
 
 	pthread_create(&arp_thread, &(sr->arp_attr), sr_arpcache_timeout, sr);
     
-    //init nat
+    /*init nat*/
     if (sr->nat_mode){
-        sr_nat_init(&(sr->the_nat));
+        sr_nat_init(&(sr->the_nat), sr->the_nat.icmp_ko, sr->the_nat.tcp_new_ko, sr->the_nat.tcp_old_ko);
     }
 } /* -- sr_init -- */
 
@@ -367,10 +368,112 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
                     currConn = currConn->next;
                 }
 
+                if (!currConn) {
+                    currConn = sr_nat_insert_tcp_con(mapping, ip_header->ip_dst);
+                }
+                currConn->last_update = time(NULL);
                 
+                
+                
+                if (currConn->state == tcp_state_closed) {
+                    if (ntohl(tcp_header->ack_num) == 0 && tcp_header->syn && !tcp_header->ack) {
+                        currConn->isn_client = ntohl(tcp_header->seq_num);
+                        currConn->state = tcp_state_syn_sent;
+                    }
+
+                }
+                
+                else if(currConn->state == tcp_state_established){
+                    
+                    if (tcp_header->fin && tcp_header->ack) {
+                        currConn->isn_client = ntohl(tcp_header->seq_num);
+                        currConn->state = tcp_state_closed;
+                    }
+                }
+                
+                else if(currConn->state == tcp_state_syn_received){
+                    
+                    if (ntohl(tcp_header->seq_num) == currConn->isn_client + 1 && ntohl(tcp_header->ack_num) == currConn->isn_server + 1 && !tcp_header->syn) {
+                        currConn->isn_client = ntohl(tcp_header->seq_num);
+                        currConn->state = tcp_state_established;
+                    }
+                    
+                    pthread_mutex_lock(&(sr->the_nat.lock));
+                    struct sr_tcp_syn *incoming = sr->the_nat.incoming;
+                    while (incoming){
+                        if ((incoming->ip_src == ip_header->ip_src) && (incoming->src_port == tcp_header->src_port)){
+                            break;
+                        }
+                        incoming = incoming->next;
+                    }
+                    
+                    if (!incoming){
+                        struct sr_tcp_syn *new = (struct sr_tcp_syn *) malloc(sizeof(struct sr_tcp_syn));
+                        new->ip_src = ip_header->ip_src;
+                        new->src_port = tcp_header->src_port;
+                        new->last_received = time(NULL);
+                        new->len = len;
+                        new->packet = (uint8_t *) malloc(len);
+                        memcpy(new->packet, packet, len);
+                        new->next = sr->the_nat.incoming;
+                        sr->the_nat.incoming = new;
+                    }
+                    pthread_mutex_unlock(&(sr->the_nat.lock));
+                    
+                }
+                
+                pthread_mutex_unlock(&(sr->the_nat.lock));
+                
+                if (longest_prefix_match(sr, ip_header->ip_dst)){
+                    ip_header->ip_src = external_interface->ip;
+                }
+                
+                tcp_header->src_port = htons(mapping->aux_ext);
+                
+                
+                ip_header->ip_sum = 0;
+                ip_header->ip_sum = cksum(ip_header, sizeof(sr_ip_hdr_t));
+                
+                tcp_header->checksum = tcp_cksum(ip_header, tcp_header, len);
             }
+            
+            /*in both cases, we alter the original packet so now its time to send it off*/
+            struct sr_rt *match = longest_prefix_match(sr, ip_header->ip_dst);
+            if (match){
+                printf("Found the match in the routing table\n");
+                struct sr_arpentry *entry = sr_arpcache_lookup(&sr->cache, match->gw.s_addr);
+                if (entry){
+                    printf("Found the ARP in the cache\n");
+                    
+                    struct sr_if *sr_interface_instance = sr_get_interface(sr, match->interface);
+                    
+                    /* Make ethernet header */
+                    sr_ethernet_hdr_t *reply_ethernet_header = (sr_ethernet_hdr_t *)packet;
+                    memcpy(reply_ethernet_header->ether_dhost, entry->mac, sizeof(unsigned char)*6);
+                    memcpy(reply_ethernet_header->ether_shost, sr_interface_instance->mac, sizeof(uint8_t)*ETHER_ADDR_LEN);
+                    reply_ethernet_header->ether_type = ethernet_header->ether_type;
+                    
+                    sr_send_packet(sr, packet, len, sr_interface_instance->name);
+                    free(entry);
+                    
+                } else {
+                    printf("ARP Cache miss\n");
+                    struct sr_arpreq *request = sr_arpcache_queuereq(&(sr->cache), ip_header->ip_dst, packet, len, match->interface);
+                    handle_qreq(sr, request);
+                    
+                }
             }
+            else {
+                fprintf(stdout,"No match. Sending ICMP net unreachable...\n");
+                send_icmp(sr, interface, packet, ip_header,len, ICMP_UNREACHABLE, ICMP_ECHO_REPLY);
+            }
+
         }
+        else if (strncmp(interface, "eth2", 5) == 0) {
+            fprintf(stdout,"Will handle external interfaces here...\n");
+
+        }
+    }
     
 
 
@@ -829,4 +932,21 @@ void handle_qreq(struct sr_instance *sr, struct sr_arpreq *request)
 	{
 		printf("difference is less than 1 (%ld). it's too soon to try again\n", diff);
 	}
+}
+
+struct sr_nat_connection *sr_nat_insert_tcp_con(struct sr_nat_mapping *mapping, uint32_t ip_con) {
+    struct sr_nat_connection *newConn = (struct sr_nat_connection *)malloc(sizeof(struct sr_nat_connection));
+    assert(newConn != NULL);
+    memset(newConn, 0, sizeof(struct sr_nat_connection));
+    
+    newConn->last_update = time(NULL);
+    newConn->ip = ip_con;
+    newConn->state = tcp_state_closed;
+    
+    struct sr_nat_connection *currConn = mapping->conns;
+    
+    mapping->conns = newConn;
+    newConn->next = currConn;
+    
+    return newConn;
 }
