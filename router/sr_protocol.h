@@ -96,6 +96,7 @@
 /* Structure of a ICMP header
  */
 struct sr_icmp_hdr {
+  uint16_t icmp_id;
   uint8_t icmp_type;
   uint8_t icmp_code;
   uint16_t icmp_sum;

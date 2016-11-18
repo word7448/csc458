@@ -51,6 +51,11 @@ void sr_init(struct sr_instance* sr)
 	pthread_t arp_thread;
 
 	pthread_create(&arp_thread, &(sr->arp_attr), sr_arpcache_timeout, sr);
+    
+    //init nat
+    if (sr->nat_mode){
+        sr_nat_init(&(sr->the_nat));
+    }
 } /* -- sr_init -- */
 
 /*---------------------------------------------------------------------
@@ -230,6 +235,8 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
     /* Get IP header */
     sr_ip_hdr_t *ip_header = (sr_ip_hdr_t *) (packet + sizeof(sr_ethernet_hdr_t));
     
+    
+    
 	/* Get this packet out early if the length is too short*/
 	if (len < sizeof(sr_ip_hdr_t)) { 
 		fprintf(stderr, "length too short, dropping packet\n");
@@ -269,10 +276,113 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
             send_icmp(sr, interface, packet, ip_header,len, ICMP_TIME_EXCEEDED, ICMP_ECHO_REPLY);
 			return;
         }
+    
+    /* NAT CODE START */
+    
+    if (sr->nat_mode) {
+        uint8_t ip_type = ip_protocol(packet + sizeof(sr_ethernet_hdr_t));
+        fprintf(stdout, "NAT MODE ENABLED.\n");
+        
+        /*Internal interfaces*/
+        if (strncmp(interface, "eth1", 5) == 0){
+            if (node){
+                fprintf(stdout,"Received at internal interface for this router\n");
+                if (ip_type == ip_protocol_icmp){
+                    fprintf(stdout,"Got an ICMP\n");
+                     sr_icmp_hdr_t *icmp_header = (sr_icmp_hdr_t*)(packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
+                     print_hdr_icmp((uint8_t*)icmp_header);
+                     if (icmp_header->icmp_type == ICMP_ECHO_REQ){
+                         send_icmp(sr, interface, packet, ip_header, len, 0, 0);
+                         return;
+                     }
+                
+                }
+                else if(ip_type == ip_protocol_tcp){
+                    fprintf(stdout,"GOT A TCP\n");
+                    send_icmp(sr, interface, packet, ip_header, len, 0, 3);
+                    return;
+                }
+                else{
+                    fprintf(stdout,"Recieved an unknown ICMP. Dropping packet\n");
+                    return;
+                }
+            }
+            
+            fprintf(stdout,"Packet not for this router -- NAT ENABLED\n");
+            if (ip_type == ip_protocol_icmp){
+                
+                /*get icmp header*/
+                sr_icmp_hdr_t *icmp_header = (sr_icmp_hdr_t*)(packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
+                
+                /*get external interface*/
+                struct sr_if *external_interface = sr_get_interface(sr, "eth2");
+                
+                /*get mapping*/
+                struct sr_nat_mapping *mapping = sr_nat_lookup_internal(&(sr->the_nat), ip_header->ip_src, icmp_header->icmp_id, nat_mapping_icmp);
+                
+                /*if mapping doesn't exist insert it*/
+                if (!mapping){
+                    mapping = sr_nat_insert_mapping(&(sr->the_nat), ip_header->ip_src, icmp_header->icmp_id, nat_mapping_icmp);
+                    mapping->ip_ext = external_interface->ip;
+                }
+                
+                struct sr_rt *prefix_match = longest_prefix_match(sr, ip_header->ip_dst);
+                
+                if (prefix_match){
+                    ip_header->ip_src = external_interface->ip;
+                }
+                
+                icmp_header->icmp_id = mapping->aux_ext;
+                
+                /*update cksum*/
+                ip_header->ip_sum = 0;
+                icmp_header->icmp_sum = 0;
+                ip_header->ip_sum = cksum(ip_header, sizeof(sr_ip_hdr_t));
+                icmp_header->icmp_sum = cksum(icmp_header, len-sizeof(sr_ethernet_hdr_t)-sizeof(sr_ip_hdr_t));
+                free(mapping);
+            }
+            
+            else if(ip_type == ip_protocol_tcp){
+                /*get TCP Header*/
+                sr_tcp_hdr_t *tcp_header = (sr_tcp_hdr_t *) (packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_tcp_hdr_t));
+                
+                struct sr_nat_mapping *mapping = sr_nat_lookup_internal(&(sr->the_nat), ip_header->ip_src, ntohs(tcp_header->src_port), nat_mapping_tcp);
+                struct sr_if *external_interface = sr_get_interface(sr, "eth2");
+                if (!mapping) {
+                    mapping = sr_nat_insert_mapping(&(sr->the_nat), ip_header->ip_src, ntohs(tcp_header->src_port), nat_mapping_tcp);
+                    mapping->ip_ext = external_interface->ip;
+                }
+                mapping->last_updated = time(NULL);
+                
+                /*LOCKED NAT*/
+                pthread_mutex_lock(&((sr->the_nat).lock));
+                
+                /*Find Connection, could be factored out into a function*/
+                struct sr_nat_connection *currConn = mapping->conns;
+                
+                while (currConn != NULL) {
+                    if (currConn->ip == ip_header->ip_dst) {
+                        break;
+                    }
+                    currConn = currConn->next;
+                }
+
+                
+            }
+            }
+        }
+    
+
+
+    
+    
+    
+    /* NAT CODE END */
 
 	/* Packet destined for this router */
     if (node != NULL) {
         uint8_t ip_type = ip_protocol(packet + sizeof(sr_ethernet_hdr_t));
+
         /* Get ICMP header */
         sr_icmp_hdr_t* icmp_header = (sr_icmp_hdr_t*)(packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
         
@@ -477,8 +587,6 @@ void send_icmp(struct sr_instance* sr, char* interface, uint8_t * packet, sr_ip_
     assert(sr);
     assert(interface);
     assert(packet);
-    
-    printf("************************************************************************ -> Received ICMP REQ with type %d and code %d \n", type,code);
     
 	int size = 0;
 	if (type == ICMP_UNREACHABLE) {
