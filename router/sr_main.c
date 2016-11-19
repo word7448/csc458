@@ -120,7 +120,10 @@ int main(int argc, char **argv)
             case 'R':
             	tcp_new_ko = atoi((char*) optarg);
             	break;
-        } /* switch */
+			case '?':
+				if (optopt == 'n')
+					sr.nat_mode = true;
+		} /* switch */
     } /* -- while -- */
 
 
