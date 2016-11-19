@@ -309,17 +309,17 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
             if (ip_type == ip_protocol_icmp){ /*icmp from lan --> wan using nat*/
                 
                 /*get icmp header*/
-                sr_icmp_hdr_t *icmp_header = (sr_icmp_hdr_t*)(packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
+                sr_icmp_tping_hdr_t *icmp_header = (sr_icmp_tping_hdr_t*)(packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
                 
                 /*get external interface*/
                 struct sr_if *external_interface = sr_get_interface(sr, "eth2");
                 
                 /*get mapping*/
-                struct sr_nat_mapping *mapping = sr_nat_lookup_internal(&(sr->the_nat), ip_header->ip_src, icmp_header->icmp_id, nat_mapping_icmp);
+                struct sr_nat_mapping *mapping = sr_nat_lookup_internal(&(sr->the_nat), ip_header->ip_src, icmp_header->identifier, nat_mapping_icmp);
                 
                 /*if mapping doesn't exist insert it*/
                 if (!mapping){
-                    mapping = sr_nat_insert_mapping(&(sr->the_nat), ip_header->ip_src, icmp_header->icmp_id, nat_mapping_icmp);
+                    mapping = sr_nat_insert_mapping(&(sr->the_nat), ip_header->ip_src, icmp_header->identifier, nat_mapping_icmp);
                     mapping->ip_ext = external_interface->ip;
                 }
                 
@@ -331,10 +331,10 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
                 
                 /*the aux_ext is a "block" of 100 icmp ids.
                  *If aux_ext = 1900 then your stream of pings will come from the wan as 1900-->1999
-                 *If your icmp_id is currently 18 then nat will change it to 1918
-                 *This formula makes it so you don't have to do change the icmp_header->icmp_id and then
-                 *	update mapping->aux_ext = icmp_header->icmp_id. Keep aux_ext and just use the formula*/
-                icmp_header->icmp_id = icmp_header->icmp_id + mapping->aux_ext;
+                 *If your identifier is currently 18 then nat will change it to 1918
+                 *This formula makes it so you don't have to do change the icmp_header->identifier and then
+                 *	update mapping->aux_ext = icmp_header->identifier. Keep aux_ext and just use the formula*/
+                icmp_header->identifier = icmp_header->identifier + mapping->aux_ext;
                 
                 /*update cksum*/
                 ip_header->ip_sum = 0;
@@ -485,7 +485,6 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
 
         /* Get ICMP header */
         sr_icmp_hdr_t* icmp_header = (sr_icmp_hdr_t*)(packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
-        
         switch (ip_type) {
             
             case ip_protocol_tcp:

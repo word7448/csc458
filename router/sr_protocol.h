@@ -96,7 +96,6 @@
 /* Structure of a ICMP header
  */
 struct sr_icmp_hdr {
-  uint16_t icmp_id;
   uint8_t icmp_type;
   uint8_t icmp_code;
   uint16_t icmp_sum;
@@ -104,7 +103,6 @@ struct sr_icmp_hdr {
   
 } __attribute__ ((packed)) ;
 typedef struct sr_icmp_hdr sr_icmp_hdr_t;
-
 
 /* Structure of a ping ICMP header (type8 = request, type0 = reply)
  */
