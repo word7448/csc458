@@ -3,7 +3,7 @@
 #include "sr_nat.h"
 #include <unistd.h>
 #include <stdlib.h>
-
+#include <stdio.h>
 
 int sr_nat_init(struct sr_nat *nat, int icmp_ko, int tcp_new_ko, int tcp_old_ko)
 { /* Initializes the nat */
@@ -109,7 +109,7 @@ void *sr_nat_timeout(void *nat_ptr)
 			}
 			untouched = true;
 		}
-
+		printf("done nat cleanup for now\n");
 		pthread_mutex_unlock(&(nat->lock));
 	}
 	return NULL;
