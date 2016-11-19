@@ -353,7 +353,6 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
                     mapping = sr_nat_insert_mapping(&(sr->the_nat), ip_header->ip_src, ntohs(tcp_header->src_port), nat_mapping_tcp);
                     mapping->ip_ext = external_interface->ip;
                 }
-                mapping->last_updated = time(NULL);
                 
                 /*LOCKED NAT*/
                 pthread_mutex_lock(&((sr->the_nat).lock));
