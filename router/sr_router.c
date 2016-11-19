@@ -336,7 +336,6 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
                 icmp_header->icmp_sum = 0;
                 ip_header->ip_sum = cksum(ip_header, sizeof(sr_ip_hdr_t));
                 icmp_header->icmp_sum = cksum(icmp_header, len-sizeof(sr_ethernet_hdr_t)-sizeof(sr_ip_hdr_t));
-                free(mapping);
             }
             
             else if(ip_type == ip_protocol_tcp){
