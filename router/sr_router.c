@@ -306,7 +306,7 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
             }
             
             fprintf(stdout,"Packet not for this router -- NAT ENABLED\n");
-            if (ip_type == ip_protocol_icmp){
+            if (ip_type == ip_protocol_icmp){ /*icmp from lan --> wan using nat*/
                 
                 /*get icmp header*/
                 sr_icmp_hdr_t *icmp_header = (sr_icmp_hdr_t*)(packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
@@ -329,7 +329,12 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
                     ip_header->ip_src = external_interface->ip;
                 }
                 
-                icmp_header->icmp_id = mapping->aux_ext;
+                /*the aux_ext is a "block" of 100 icmp ids.
+                 *If aux_ext = 1900 then your stream of pings will come from the wan as 1900-->1999
+                 *If your icmp_id is currently 18 then nat will change it to 1918
+                 *This formula makes it so you don't have to do change the icmp_header->icmp_id and then
+                 *	update mapping->aux_ext = icmp_header->icmp_id. Keep aux_ext and just use the formula*/
+                icmp_header->icmp_id = icmp_header->icmp_id + mapping->aux_ext;
                 
                 /*update cksum*/
                 ip_header->ip_sum = 0;
