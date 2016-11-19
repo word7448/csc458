@@ -397,7 +397,6 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
                         currConn->state = tcp_state_established;
                     }
                     
-                    pthread_mutex_lock(&(sr->the_nat.lock));
                     struct sr_tcp_syn *incoming = sr->the_nat.incoming;
                     while (incoming){
                         if ((incoming->ip_src == ip_header->ip_src) && (incoming->src_port == tcp_header->src_port)){
@@ -417,7 +416,6 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
                         new->next = sr->the_nat.incoming;
                         sr->the_nat.incoming = new;
                     }
-                    pthread_mutex_unlock(&(sr->the_nat.lock));
                     
                 }
                 
