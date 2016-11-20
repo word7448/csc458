@@ -48,7 +48,38 @@ int sr_nat_destroy(struct sr_nat *nat)
 
 	pthread_mutex_lock(&(nat->lock));
 
-	/* free nat memory here */
+	/*remove the mapping*/
+	struct sr_nat_mapping *current_mapping = nat->mappings;
+	struct sr_nat_mapping *previous_mapping = current_mapping;
+	while(current_mapping != NULL)
+	{
+		/*reset the "taken" array*/
+		if(current_mapping->type == nat_mapping_icmp)
+		{
+			nat->icmp_id_taken[current_mapping->aux_ext-1024] = false;
+		}
+		else
+		{
+			nat->port_taken[current_mapping->aux_ext-1024] = false;
+		}
+
+		/*remove the mapping's connection and then itself*/
+		previous_mapping = current_mapping;
+		current_mapping = current_mapping->next;
+		remove_nat_connections(previous_mapping->conns);
+		free(previous_mapping);
+	}
+
+	/*remove the sr_tcp_syn*/
+	struct sr_tcp_syn *current_syn = nat->incoming;
+	struct sr_tcp_syn *previous_syn = current_syn;
+	while(current_syn != NULL)
+	{
+		previous_syn = current_syn;
+		current_syn = current_syn->next;
+		free(previous_syn->packet); /*still using ever pointer for interface name so don't have to free it*/
+		free(previous_syn);
+	}
 
 	pthread_kill(nat->thread, SIGKILL);
 	return pthread_mutex_destroy(&(nat->lock)) && pthread_mutexattr_destroy(&(nat->attr));
