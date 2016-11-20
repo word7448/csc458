@@ -493,13 +493,6 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
 						return;
 					}
 					
-					/* This should never return null */
-					while (extmapping) {
-						if (extmapping->ip_int == ntohl(ip_header->ip_src))
-							break;
-						extmapping = extmapping->next;
-					}
-
 					/* Guard against unexpected null mapping */
 					if (!extmapping) {
 						fprintf(stderr, "Something horrible happened when looking for an existing mapping\n");
@@ -516,12 +509,14 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
 
 					/* Modify ethernet header */
 					/* change mac addresses ;; something something arp req */
-					memcpy(sr_get_interface(sr, "eth1")->mac, ethernet_header->ether_dhost, sizeof(sr_ethernet_hdr_t));
-					/* Do the destination */
-
-
-					sr_send_packet(sr, packet, len, sr_get_interface(sr, "eth1"));
-
+					memcpy(sr_get_interface(sr, "eth1")->mac, ethernet_header->ether_shost, sizeof(sr_ethernet_hdr_t));
+					struct sr_arpentry *entry = sr_arpcache_lookup(&sr->cache, extmapping->ip_int);
+					if (entry) {
+						memcpy(entry->mac, ethernet_header->ether_dhost, sizeof(sr_ethernet_hdr_t));
+						print_hdrs(packet, len);
+						sr_send_packet(sr, packet, len, sr_get_interface(sr, "eth1"));
+						return;
+					}
 
 					break;
 				}
