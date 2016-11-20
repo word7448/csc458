@@ -78,6 +78,7 @@ void *sr_nat_timeout(void *nat_ptr)
 				untouched = false;
 				previous->next = current->next;
 				nat->icmp_id_taken[current->aux_ext-1024] = false;
+				remove_nat_connections(current->conns);
 				free(current);
 				current = previous->next;
 			}
@@ -86,6 +87,7 @@ void *sr_nat_timeout(void *nat_ptr)
 				untouched = false;
 				previous->next = current->next;
 				nat->port_taken[current->aux_ext-1024] = false;
+				remove_nat_connections(current->conns);
 				free(current);
 				current = previous->next;
 			}
@@ -94,6 +96,7 @@ void *sr_nat_timeout(void *nat_ptr)
 				untouched = false;
 				previous->next = current->next;
 				nat->port_taken[current->aux_ext-1024] = false;
+				remove_nat_connections(current->conns);
 				free(current);
 				current = previous->next;
 			}
@@ -114,6 +117,18 @@ void *sr_nat_timeout(void *nat_ptr)
 	return NULL;
 }
 
+void remove_nat_connections(struct sr_nat_connection *conn)
+{
+	struct sr_nat_connection *current = conn;
+	struct sr_nat_connection *previous = conn;
+
+	while(current != NULL)
+	{
+		previous = current;
+		current = current->next;
+		free(previous);
+	}
+}
 /* Get the mapping associated with given external port.
  You must free the returned structure if it is not NULL. */
 struct sr_nat_mapping *sr_nat_lookup_external(struct sr_nat *nat, uint16_t aux_ext, sr_nat_mapping_type type)
