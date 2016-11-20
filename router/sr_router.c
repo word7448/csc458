@@ -282,6 +282,7 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
         
         /*Internal interfaces*/
         if (strncmp(interface, "eth1", 5) == 0){
+			/* Packet for this router */
             if (node){
                 fprintf(stdout,"Received at internal interface for this router\n");
                 if (ip_type == ip_protocol_icmp){
@@ -366,14 +367,12 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
                 }
                 currConn->last_update = time(NULL);
                 
-                
-                
+
                 if (currConn->state == tcp_state_closed) {
                     if (ntohl(tcp_header->ack_num) == 0 && tcp_header->syn && !tcp_header->ack) {
                         currConn->isn_client = ntohl(tcp_header->seq_num);
                         currConn->state = tcp_state_syn_sent;
                     }
-
                 }
                 
                 else if(currConn->state == tcp_state_established){
@@ -410,7 +409,6 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
                         new->next = sr->the_nat.incoming;
                         sr->the_nat.incoming = new;
                     }
-                    
                 }
                 
                 pthread_mutex_unlock(&(sr->the_nat.lock));
@@ -461,8 +459,50 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
             }
 
         }
+		/* Received packet from outside */
         else if (strncmp(interface, "eth2", 5) == 0) {
-            fprintf(stdout,"Will handle external interfaces here...\n");
+            fprintf(stdout,"External host reply/connection attempt\n");
+			print_hdrs(packet, len);
+
+			switch (ip_type) {
+				case ip_protocol_tcp: {
+					fprintf(stdout, "Got a TCP on ext int\n");
+
+					sr_tcp_hdr_t *tcp_header = (sr_tcp_hdr_t*)(packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
+					struct sr_nat_mapping *extmapping = sr_nat_lookup_external(&(sr->the_nat), ntohs(tcp_header->dst_port), nat_mapping_tcp);
+					/* Unsolicited connection, drop packet */
+					if (!extmapping) {
+						fprintf(stdout, "No external mappings for this TCP packet, dropping...\n");
+						/* Is this the start of a memory leak? Do I have to free packet? */
+						/*free(packet);*/
+						return;
+					}
+
+					break;
+					}
+				case ip_protocol_icmp: {
+					fprintf(stdout, "Got an ICMP on ext int\n");
+					sr_icmp_tping_hdr_t *icmp_header = (sr_icmp_tping_hdr_t*)(packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
+					icmp_header->identifier;
+					struct sr_nat_mapping *extmapping = sr_nat_lookup_external(&(sr->the_nat), icmp_header->identifier, nat_mapping_icmp);
+					/* Unsolicited connection, drop packet */
+					if (!extmapping) {
+						fprintf(stdout, "No external mappings for this ICMP packet, dropping...\n");
+						/* Is this the start of a memory leak? Do I have to free packet? */
+						/*free(packet);*/
+						return;
+					}
+
+
+					struct sr_nat_mapping *intmapping = sr_nat_lookup_internal(&(sr->the_nat), ip_header->ip_src, icmp_header->identifier, nat_mapping_icmp);
+
+
+					break;
+				}
+				default:
+					fprintf(stdout, "Unsupported protocol (not ICMP or TCP)");
+			}
+
 			return;
         }
     }
