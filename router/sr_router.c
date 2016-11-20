@@ -610,26 +610,6 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
     return;
 }
 
-/* Preps the L2 header and sends the packet */
-int pack_l2_and_ship(struct sr_instance *sr, void *packet, int len, struct sr_if *interface, unsigned char *dest_mac) {
-
-	sr_ethernet_hdr_t *ethernet_header = (sr_ethernet_hdr_t *)packet;
-
-	/* Make ethernet header */
-	sr_ethernet_hdr_t *reply_ethernet_header = (sr_ethernet_hdr_t *)packet;
-	memcpy(reply_ethernet_header->ether_dhost, dest_mac, sizeof(unsigned char) * 6);
-	reply_ethernet_header->ether_type = ethernet_header->ether_type;
-
-	print_hdrs(packet, len);
-	int result = sr_send_packet(sr, packet, len, interface->name);
-	if (result) {
-		fprintf(stderr, "Something went wrong with sending the packet after L2 packing\n");
-		return 1;
-	}
-
-	return 0;
-}
-
 /* Finds excuses to get rid of an IP packet */
 int sanity_check(sr_ip_hdr_t *ip_header) {
 

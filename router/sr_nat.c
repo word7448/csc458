@@ -109,7 +109,6 @@ void *sr_nat_timeout(void *nat_ptr)
 			}
 			untouched = true;
 		}
-		//printf("done nat cleanup for now\n");
 		pthread_mutex_unlock(&(nat->lock));
 	}
 	return NULL;
