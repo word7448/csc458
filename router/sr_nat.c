@@ -32,13 +32,13 @@ int sr_nat_init(struct sr_nat *nat, int icmp_ko, int tcp_new_ko, int tcp_old_ko)
 
 	/*nothing is taken at the begining*/
 	int i;
-	for(i=0; i<USEABLE_PORTS; i++)
+	for(i=0; i<USEABLE_EXTERNALS; i++)
 	{
 		nat->port_taken[i] = false;
 	}
-	for(i=0; i<USEABLE_PING_BLOCKS; i++)
+	for(i=0; i<USEABLE_EXTERNALS; i++)
 	{
-		nat->icmp_seq_block_taken[i] = false;
+		nat->icmp_id_taken[i] = false;
 	}
 	return success;
 }
@@ -77,7 +77,7 @@ void *sr_nat_timeout(void *nat_ptr)
 			{
 				untouched = false;
 				previous->next = current->next;
-				nat->icmp_seq_block_taken[(current->aux_ext)/100] = false; /*just chops off the last 2 #s to get the sequence block*/
+				nat->icmp_id_taken[current->aux_ext-1024] = false;
 				free(current);
 				current = previous->next;
 			}
@@ -85,7 +85,7 @@ void *sr_nat_timeout(void *nat_ptr)
 			{
 				untouched = false;
 				previous->next = current->next;
-				nat->port_taken[current->aux_ext+1024] = false;
+				nat->port_taken[current->aux_ext-1024] = false;
 				free(current);
 				current = previous->next;
 			}
@@ -93,7 +93,7 @@ void *sr_nat_timeout(void *nat_ptr)
 			{
 				untouched = false;
 				previous->next = current->next;
-				nat->port_taken[current->aux_ext+1024] = false;
+				nat->port_taken[current->aux_ext-1024] = false;
 				free(current);
 				current = previous->next;
 			}
@@ -175,22 +175,23 @@ struct sr_nat_mapping *sr_nat_insert_mapping(struct sr_nat *nat, uint32_t ip_int
 	int external;
 	if (type == nat_mapping_tcp_new) /*you're never going to be inserting an established/old tcp mapping*/
 	{
-		external = rand() % USEABLE_PORTS;
+		external = rand() % USEABLE_EXTERNALS;
 		while (nat->port_taken[external])
 		{
-			external = rand() % USEABLE_PORTS;
+			external = rand() % USEABLE_EXTERNALS;
 		}
-		external = external + 1024;
+		nat->port_taken[external] = true;
 	}
 	else if (type == nat_mapping_icmp)
 	{
-		external = rand() % USEABLE_PING_BLOCKS;
-		while (nat->icmp_seq_block_taken[external])
+		external = rand() % USEABLE_EXTERNALS;
+		while (nat->icmp_id_taken[external])
 		{
-			external = rand() % USEABLE_PING_BLOCKS;
+			external = rand() % USEABLE_EXTERNALS;
 		}
-		external = external*100;
+		nat->icmp_id_taken[external] = true;
 	}
+	external = external + 1024;
 
 	struct sr_nat_mapping *mapping = malloc(sizeof(struct sr_nat_mapping));
 	mapping->ip_int = ip_int;
