@@ -319,7 +319,7 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
                 
                 /*if mapping doesn't exist insert it*/
                 if (!mapping){
-                    mapping = sr_nat_insert_mapping(&(sr->the_nat), ip_header->ip_src, icmp_header->identifier, nat_mapping_icmp);
+                    mapping = sr_nat_insert_mapping(&(sr->the_nat), ntohl(ip_header->ip_src), icmp_header->identifier, nat_mapping_icmp);
                     mapping->ip_ext = external_interface->ip;
                 }
                 
@@ -345,7 +345,7 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
                 struct sr_nat_mapping *mapping = sr_nat_lookup_internal(&(sr->the_nat), ip_header->ip_src, ntohs(tcp_header->src_port), nat_mapping_tcp);
                 struct sr_if *external_interface = sr_get_interface(sr, "eth2");
                 if (!mapping) {
-                    mapping = sr_nat_insert_mapping(&(sr->the_nat), ip_header->ip_src, ntohs(tcp_header->src_port), nat_mapping_tcp);
+                    mapping = sr_nat_insert_mapping(&(sr->the_nat), ntohl(ip_header->ip_src), ntohs(tcp_header->src_port), nat_mapping_tcp);
                     mapping->ip_ext = external_interface->ip;
                 }
                 
@@ -511,6 +511,7 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
 					/* change mac addresses ;; something something arp req */
 					memcpy(sr_get_interface(sr, "eth1")->mac, ethernet_header->ether_shost, sizeof(sr_ethernet_hdr_t));
 					struct sr_arpentry *entry = sr_arpcache_lookup(&sr->cache, extmapping->ip_int);
+					print_addr_ip_int(extmapping->ip_int);
 					if (entry) {
 						memcpy(entry->mac, ethernet_header->ether_dhost, sizeof(sr_ethernet_hdr_t));
 						print_hdrs(packet, len);
