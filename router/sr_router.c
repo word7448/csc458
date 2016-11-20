@@ -451,26 +451,22 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
                     printf("ARP Cache miss\n");
                     struct sr_arpreq *request = sr_arpcache_queuereq(&(sr->cache), ip_header->ip_dst, packet, len, match->interface);
                     handle_qreq(sr, request);
-                    
+					return;
                 }
             }
             else {
                 fprintf(stdout,"No match. Sending ICMP net unreachable...\n");
                 send_icmp(sr, interface, packet, ip_header,len, ICMP_UNREACHABLE, ICMP_ECHO_REPLY, false);
+				return;
             }
 
         }
         else if (strncmp(interface, "eth2", 5) == 0) {
             fprintf(stdout,"Will handle external interfaces here...\n");
-
+			return;
         }
     }
-    
 
-
-    
-    
-    
     /* NAT CODE END */
 
 	/* Packet destined for this router */
