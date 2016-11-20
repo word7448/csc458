@@ -329,12 +329,7 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
                     ip_header->ip_src = external_interface->ip;
                 }
                 
-                /*the aux_ext is a "block" of 100 icmp ids.
-                 *If aux_ext = 1900 then your stream of pings will come from the wan as 1900-->1999
-                 *If your identifier is currently 18 then nat will change it to 1918
-                 *This formula makes it so you don't have to do change the icmp_header->identifier and then
-                 *	update mapping->aux_ext = icmp_header->identifier. Keep aux_ext and just use the formula*/
-                icmp_header->identifier = icmp_header->identifier + mapping->aux_ext;
+                icmp_header->identifier = mapping->aux_ext;
                 
                 /*update cksum*/
                 ip_header->ip_sum = 0;
