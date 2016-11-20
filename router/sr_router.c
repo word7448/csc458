@@ -282,6 +282,7 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
         
         /*Internal interfaces*/
         if (strncmp(interface, "eth1", 5) == 0){
+			/* Packet for this router */
             if (node){
                 fprintf(stdout,"Received at internal interface for this router\n");
                 if (ip_type == ip_protocol_icmp){
@@ -318,7 +319,7 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
                 
                 /*if mapping doesn't exist insert it*/
                 if (!mapping){
-                    mapping = sr_nat_insert_mapping(&(sr->the_nat), ip_header->ip_src, icmp_header->identifier, nat_mapping_icmp);
+                    mapping = sr_nat_insert_mapping(&(sr->the_nat), ntohl(ip_header->ip_src), icmp_header->identifier, nat_mapping_icmp);
                     mapping->ip_ext = external_interface->ip;
                 }
                 
@@ -344,7 +345,7 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
                 struct sr_nat_mapping *mapping = sr_nat_lookup_internal(&(sr->the_nat), ip_header->ip_src, ntohs(tcp_header->src_port), nat_mapping_tcp);
                 struct sr_if *external_interface = sr_get_interface(sr, "eth2");
                 if (!mapping) {
-                    mapping = sr_nat_insert_mapping(&(sr->the_nat), ip_header->ip_src, ntohs(tcp_header->src_port), nat_mapping_tcp);
+                    mapping = sr_nat_insert_mapping(&(sr->the_nat), ntohl(ip_header->ip_src), ntohs(tcp_header->src_port), nat_mapping_tcp);
                     mapping->ip_ext = external_interface->ip;
                 }
                 
@@ -366,14 +367,12 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
                 }
                 currConn->last_update = time(NULL);
                 
-                
-                
+
                 if (currConn->state == tcp_state_closed) {
                     if (ntohl(tcp_header->ack_num) == 0 && tcp_header->syn && !tcp_header->ack) {
                         currConn->isn_client = ntohl(tcp_header->seq_num);
                         currConn->state = tcp_state_syn_sent;
                     }
-
                 }
                 
                 else if(currConn->state == tcp_state_established){
@@ -410,7 +409,6 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
                         new->next = sr->the_nat.incoming;
                         sr->the_nat.incoming = new;
                     }
-                    
                 }
                 
                 pthread_mutex_unlock(&(sr->the_nat.lock));
@@ -451,26 +449,86 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
                     printf("ARP Cache miss\n");
                     struct sr_arpreq *request = sr_arpcache_queuereq(&(sr->cache), ip_header->ip_dst, packet, len, match->interface);
                     handle_qreq(sr, request);
-                    
+					return;
                 }
             }
             else {
                 fprintf(stdout,"No match. Sending ICMP net unreachable...\n");
                 send_icmp(sr, interface, packet, ip_header,len, ICMP_UNREACHABLE, ICMP_ECHO_REPLY, false);
+				return;
             }
 
         }
+		/* Received packet from outside */
         else if (strncmp(interface, "eth2", 5) == 0) {
-            fprintf(stdout,"Will handle external interfaces here...\n");
+            fprintf(stdout,"External host reply/connection attempt\n");
+			print_hdrs(packet, len);
 
+			switch (ip_type) {
+				case ip_protocol_tcp: {
+					fprintf(stdout, "Got a TCP on ext int\n");
+
+					sr_tcp_hdr_t *tcp_header = (sr_tcp_hdr_t*)(packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
+					struct sr_nat_mapping *extmapping = sr_nat_lookup_external(&(sr->the_nat), ntohs(tcp_header->dst_port), nat_mapping_tcp);
+					/* Unsolicited connection, drop packet */
+					if (!extmapping) {
+						fprintf(stdout, "No external mappings for this TCP packet, dropping...\n");
+						/* Is this the start of a memory leak? Do I have to free packet? */
+						/*free(packet);*/
+						return;
+					}
+
+					break;
+					}
+				case ip_protocol_icmp: {
+					fprintf(stdout, "Got an ICMP on ext int\n");
+					sr_icmp_tping_hdr_t *icmp_header = (sr_icmp_tping_hdr_t*)(packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
+					icmp_header->identifier;
+					struct sr_nat_mapping *extmapping = sr_nat_lookup_external(&(sr->the_nat), icmp_header->identifier, nat_mapping_icmp);
+					/* Unsolicited connection, drop packet */
+					if (!extmapping) {
+						fprintf(stdout, "No external mappings for this ICMP packet, dropping...\n");
+						/* Is this the start of a memory leak? Do I have to free packet? */
+						/*free(packet);*/
+						return;
+					}
+					
+					/* Guard against unexpected null mapping */
+					if (!extmapping) {
+						fprintf(stderr, "Something horrible happened when looking for an existing mapping\n");
+						return;
+					}
+					
+					/* Modify ICMP header */
+					icmp_header->identifier = extmapping->ip_ext;
+
+					/* Modify IP header */
+					ip_header->ip_dst = extmapping->ip_int;
+					ip_header->ip_src = sr_get_interface(sr, "eth1")->ip;
+
+
+					/* Modify ethernet header */
+					/* change mac addresses ;; something something arp req */
+					memcpy(sr_get_interface(sr, "eth1")->mac, ethernet_header->ether_shost, sizeof(sr_ethernet_hdr_t));
+					struct sr_arpentry *entry = sr_arpcache_lookup(&sr->cache, extmapping->ip_int);
+					print_addr_ip_int(extmapping->ip_int);
+					if (entry) {
+						memcpy(entry->mac, ethernet_header->ether_dhost, sizeof(sr_ethernet_hdr_t));
+						print_hdrs(packet, len);
+						sr_send_packet(sr, packet, len, sr_get_interface(sr, "eth1"));
+						return;
+					}
+
+					break;
+				}
+				default:
+					fprintf(stdout, "Unsupported protocol (not ICMP or TCP)");
+			}
+
+			return;
         }
     }
-    
 
-
-    
-    
-    
     /* NAT CODE END */
 
 	/* Packet destined for this router */
