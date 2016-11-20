@@ -492,9 +492,35 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
 						/*free(packet);*/
 						return;
 					}
+					
+					/* This should never return null */
+					while (extmapping) {
+						if (extmapping->ip_int == ntohl(ip_header->ip_src))
+							break;
+						extmapping = extmapping->next;
+					}
+
+					/* Guard against unexpected null mapping */
+					if (!extmapping) {
+						fprintf(stderr, "Something horrible happened when looking for an existing mapping\n");
+						return;
+					}
+					
+					/* Modify ICMP header */
+					icmp_header->identifier = extmapping->ip_ext;
+
+					/* Modify IP header */
+					ip_header->ip_dst = extmapping->ip_int;
+					ip_header->ip_src = sr_get_interface(sr, "eth1")->ip;
 
 
-					struct sr_nat_mapping *intmapping = sr_nat_lookup_internal(&(sr->the_nat), ip_header->ip_src, icmp_header->identifier, nat_mapping_icmp);
+					/* Modify ethernet header */
+					/* change mac addresses ;; something something arp req */
+					memcpy(sr_get_interface(sr, "eth1")->mac, ethernet_header->ether_dhost, sizeof(sr_ethernet_hdr_t));
+					/* Do the destination */
+
+
+					sr_send_packet(sr, packet, len, sr_get_interface(sr, "eth1"));
 
 
 					break;
