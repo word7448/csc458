@@ -266,9 +266,12 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
             ip_header->ip_sum = cksum(ip_header, ip_header->ip_hl * 4);
 
 			
-			struct sr_arpentry *arpl = sr_arpcache_lookup(sr, ip_header->ip_src);
-			if (!arpl)
+			struct sr_arpentry *arpl = sr_arpcache_lookup(&sr->cache, ip_header->ip_src);
+			if (!arpl) {
 				sr_arpcache_insert(&sr->cache, ethernet_header->ether_shost, ip_header->ip_src);
+				free(arpl);
+			}
+
         }
 		else if (ip_header->ip_ttl == 1 && node) {
 			;
@@ -518,7 +521,7 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
 					if (entry) {
 						memcpy(entry->mac, ethernet_header->ether_dhost, sizeof(sr_ethernet_hdr_t));
 						print_hdrs(packet, len);
-						sr_send_packet(sr, packet, len, sr_get_interface(sr, "eth1"));
+						sr_send_packet(sr, packet, len, "eth1");
 						return;
 					}
 					break;
