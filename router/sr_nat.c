@@ -71,6 +71,7 @@ int sr_nat_destroy(struct sr_nat *nat)
 		remove_nat_connections(previous_mapping->conns);
 		free(previous_mapping);
 	}
+	nat->mappings = NULL;
 
 	/*remove the sr_tcp_syn*/
 	struct sr_tcp_syn *current_syn = nat->incoming;
@@ -82,6 +83,7 @@ int sr_nat_destroy(struct sr_nat *nat)
 		free(previous_syn->packet); /*still using ever pointer for interface name so don't have to free it*/
 		free(previous_syn);
 	}
+	nat->incoming = NULL;
 
 	pthread_kill(nat->thread, SIGKILL);
 	return pthread_mutex_destroy(&(nat->lock)) && pthread_mutexattr_destroy(&(nat->attr));
