@@ -1,6 +1,7 @@
 #include <signal.h>
 #include <assert.h>
 #include "sr_nat.h"
+#include "sr_utils.h"
 #include <unistd.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -196,11 +197,16 @@ struct sr_nat_mapping *sr_nat_lookup_internal(struct sr_nat *nat, uint32_t ip_in
 
 	pthread_mutex_lock(&(nat->lock));
 
+	printf("got an internal nat request; looking for type %d for internal port/identifier %d for ip:\n", type, aux_int);
+	print_addr_ip_int(ip_int);
+
 	/* handle lookup here, malloc and assign to copy. */
 	struct sr_nat_mapping *pointer = nat->mappings;
 
 	while(pointer != NULL)
 	{
+		printf("inspecting aux-internal %d, type %d, ip:\n", pointer->aux_int, pointer->type);
+		print_addr_ip_int(pointer->ip_int);
 		if(pointer->ip_int == ip_int && pointer->aux_int == aux_int && pointer->type == type)
 		{
 			pointer->last_updated = time(NULL);
