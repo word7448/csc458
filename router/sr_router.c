@@ -264,6 +264,11 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
             ip_header->ip_ttl = ip_header->ip_ttl - 1;
             ip_header->ip_sum = 0;
             ip_header->ip_sum = cksum(ip_header, ip_header->ip_hl * 4);
+
+			
+			struct sr_arpentry *arpl = sr_arpcache_lookup(sr, ip_header->ip_src);
+			if (!arpl)
+				sr_arpcache_insert(&sr->cache, ethernet_header->ether_shost, ip_header->ip_src);
         }
 		else if (ip_header->ip_ttl == 1 && node) {
 			;
@@ -319,7 +324,8 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
                 
                 /*if mapping doesn't exist insert it*/
                 if (!mapping){
-                    mapping = sr_nat_insert_mapping(&(sr->the_nat), ntohl(ip_header->ip_src), icmp_header->identifier, nat_mapping_icmp);
+					ntohs(icmp_header->identifier);
+                    mapping = sr_nat_insert_mapping(&(sr->the_nat), ip_header->ip_src, icmp_header->identifier, nat_mapping_icmp);
                     mapping->ip_ext = external_interface->ip;
                 }
                 
@@ -345,7 +351,7 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
                 struct sr_nat_mapping *mapping = sr_nat_lookup_internal(&(sr->the_nat), ip_header->ip_src, ntohs(tcp_header->src_port), nat_mapping_tcp);
                 struct sr_if *external_interface = sr_get_interface(sr, "eth2");
                 if (!mapping) {
-                    mapping = sr_nat_insert_mapping(&(sr->the_nat), ntohl(ip_header->ip_src), ntohs(tcp_header->src_port), nat_mapping_tcp);
+                    mapping = sr_nat_insert_mapping(&(sr->the_nat), ip_header->ip_src, tcp_header->src_port, nat_mapping_tcp);
                     mapping->ip_ext = external_interface->ip;
                 }
                 
@@ -477,9 +483,8 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
 						/*free(packet);*/
 						return;
 					}
-
 					break;
-					}
+				}
 				case ip_protocol_icmp: {
 					fprintf(stdout, "Got an ICMP on ext int\n");
 					sr_icmp_tping_hdr_t *icmp_header = (sr_icmp_tping_hdr_t*)(packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
@@ -492,33 +497,30 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
 						/*free(packet);*/
 						return;
 					}
-					
-					/* Guard against unexpected null mapping */
-					if (!extmapping) {
-						fprintf(stderr, "Something horrible happened when looking for an existing mapping\n");
-						return;
-					}
-					
+
 					/* Modify ICMP header */
-					icmp_header->identifier = extmapping->ip_ext;
+					icmp_header->identifier = extmapping->aux_int; /* Comes in network byte order already */
+					icmp_header->icmp_sum = 0;
+					icmp_header->icmp_sum = cksum(icmp_header, len - sizeof(sr_ethernet_hdr_t) - sizeof(sr_ip_hdr_t));
 
 					/* Modify IP header */
-					ip_header->ip_dst = extmapping->ip_int;
-					ip_header->ip_src = sr_get_interface(sr, "eth1")->ip;
-
+					ip_header->ip_dst = extmapping->ip_int; /* Comes in network byte order already */
+					/*ip_header->ip_src = sr_get_interface(sr, "eth1")->ip; /* Magic: is in network byte order */
+					ip_header->ip_sum = 0;
+					ip_header->ip_sum = cksum(ip_header, sizeof(sr_ip_hdr_t));
 
 					/* Modify ethernet header */
-					/* change mac addresses ;; something something arp req */
 					memcpy(sr_get_interface(sr, "eth1")->mac, ethernet_header->ether_shost, sizeof(sr_ethernet_hdr_t));
-					struct sr_arpentry *entry = sr_arpcache_lookup(&sr->cache, extmapping->ip_int);
 					print_addr_ip_int(extmapping->ip_int);
+					struct sr_arpentry *entry = sr_arpcache_lookup(&sr->cache, extmapping->ip_int);
+					/* make arp request here if no entry found */
+
 					if (entry) {
 						memcpy(entry->mac, ethernet_header->ether_dhost, sizeof(sr_ethernet_hdr_t));
 						print_hdrs(packet, len);
 						sr_send_packet(sr, packet, len, sr_get_interface(sr, "eth1"));
 						return;
 					}
-
 					break;
 				}
 				default:
