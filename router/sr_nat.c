@@ -101,42 +101,105 @@ void *sr_nat_timeout(void *nat_ptr)
 		bool untouched = true;
 		
 		struct sr_nat_mapping *current = nat->mappings;
-		struct sr_nat_mapping *previous = current;
+		struct sr_nat_mapping *previous = NULL;
 		
 		while (current != NULL)
 		{
+			bool head_mode = false;
+			if(previous == NULL)
+			{
+				/*head of the list requires special treatment
+				 * the normal "splice out the middle" doesn't work on the head because it isn't in the middle*/
+				head_mode = true;
+			}
 			diff = now - current->last_updated;
-			if((current->type == nat_mapping_icmp) && (diff > nat->icmp_ko))
+			if ((current->type == nat_mapping_icmp) && (diff > nat->icmp_ko))
 			{
 				printf("Removing ICMP mapping of internal identifier %d to external identifier %d\n", current->aux_int, current->aux_ext);
 				untouched = false;
-				previous->next = current->next;
-				nat->icmp_id_taken[current->aux_ext-1024] = false;
+				if (head_mode)
+				{/*for the head of the list, replace the actual head of the_nat->mappings*/
+					nat->mappings = current->next;
+				}
+				else
+				{/*for an entry that is in the middle of the list, splice it out*/
+					previous->next = current->next;
+				}
+				nat->icmp_id_taken[current->aux_ext - 1024] = false;
 				remove_nat_connections(current->conns);
 				free(current);
-				current = previous->next;
+				if (head_mode)
+				{
+					/*for the head of the list, the next thing you're going to inspect is... the head of the list again,
+					 * but this time it's a different head. set everything up for "head_mode again" just like before the while loop started*/
+					current = nat->mappings;
+					previous = NULL;
+				}
+				else
+				{
+					/*for the middle of the list the next thing you're inspecting is the deleted entry's next
+					 * because the deleted entry was spliced out, its next is right after the "previous"*/
+					current = previous->next;
+				}
 			}
-			else if((current->type == nat_mapping_tcp_old) && (diff > nat->tcp_old_ko))
+			else if ((current->type == nat_mapping_tcp_old) && (diff > nat->tcp_old_ko))
 			{
 				printf("Removing OLD tcp mapping of internal port %d to external port %d\n", current->aux_int, current->aux_ext);
 				untouched = false;
-				previous->next = current->next;
-				nat->port_taken[current->aux_ext-1024] = false;
+				if (head_mode)
+				{/*for the head of the list, replace the actual head of the_nat->mappings*/
+					nat->mappings = current->next;
+				}
+				else
+				{/*for an entry that is in the middle of the list, splice it out*/
+					previous->next = current->next;
+				}
+				nat->port_taken[current->aux_ext - 1024] = false;
 				remove_nat_connections(current->conns);
 				free(current);
-				current = previous->next;
+				if (head_mode)
+				{
+					/*for the head of the list, the next thing you're going to inspect is... the head of the list again,
+					 * but this time it's a different head. set everything up for "head_mode again" just like before the while loop started*/
+					current = nat->mappings;
+					previous = NULL;
+				}
+				else
+				{
+					/*for the middle of the list the next thing you're inspecting is the deleted entry's next
+					 * because the deleted entry was spliced out, its next is right after the "previous"*/
+					current = previous->next;
+				}
 			}
-			else if((current->type == nat_mapping_tcp_new) && (diff > nat->tcp_new_ko))
+			else if ((current->type == nat_mapping_tcp_new) && (diff > nat->tcp_new_ko))
 			{
 				printf("Removing NEW tcp mapping of internal port %d to external port %d\n", current->aux_int, current->aux_ext);
 				untouched = false;
-				previous->next = current->next;
-				nat->port_taken[current->aux_ext-1024] = false;
+				if (head_mode)
+				{/*for the head of the list, replace the actual head of the_nat->mappings*/
+					nat->mappings = current->next;
+				}
+				else
+				{/*for an entry that is in the middle of the list, splice it out*/
+					previous->next = current->next;
+				}
+				nat->port_taken[current->aux_ext - 1024] = false;
 				remove_nat_connections(current->conns);
 				free(current);
-				current = previous->next;
+				if (head_mode)
+				{
+					/*for the head of the list, the next thing you're going to inspect is... the head of the list again,
+					 * but this time it's a different head. set everything up for "head_mode again" just like before the while loop started*/
+					current = nat->mappings;
+					previous = NULL;
+				}
+				else
+				{
+					/*for the middle of the list the next thing you're inspecting is the deleted entry's next
+					 * because the deleted entry was spliced out, its next is right after the "previous"*/
+					current = previous->next;
+				}
 			}
-
 			/*only change both pointers if an entry was not removed.
 			 * if an entry was removed then when it goes, the removed entry's next
 			 * is the current. that means what is now "current" hasn't been inspected yet.
