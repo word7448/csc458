@@ -323,7 +323,7 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
                 struct sr_if *external_interface = sr_get_interface(sr, "eth2");
                 
                 /*get mapping*/
-                struct sr_nat_mapping *mapping = sr_nat_lookup_internal(&(sr->the_nat), ntohl(ip_header->ip_src), icmp_header->identifier, nat_mapping_icmp);
+                struct sr_nat_mapping *mapping = sr_nat_lookup_internal(&(sr->the_nat), ip_header->ip_src, icmp_header->identifier, nat_mapping_icmp);
                 
                 /*if mapping doesn't exist insert it*/
                 if (!mapping){
