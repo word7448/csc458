@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 
 int sr_nat_init(struct sr_nat *nat, int icmp_ko, int tcp_new_ko, int tcp_old_ko)
 { /* Initializes the nat */
@@ -106,6 +107,7 @@ void *sr_nat_timeout(void *nat_ptr)
 			diff = now - current->last_updated;
 			if((current->type == nat_mapping_icmp) && (diff > nat->icmp_ko))
 			{
+				printf("Removing ICMP mapping of internal identifier %d to external identifier %d\n", current->aux_int, current->aux_ext);
 				untouched = false;
 				previous->next = current->next;
 				nat->icmp_id_taken[current->aux_ext-1024] = false;
@@ -115,6 +117,7 @@ void *sr_nat_timeout(void *nat_ptr)
 			}
 			else if((current->type == nat_mapping_tcp_old) && (diff > nat->tcp_old_ko))
 			{
+				printf("Removing OLD tcp mapping of internal port %d to external port %d\n", current->aux_int, current->aux_ext);
 				untouched = false;
 				previous->next = current->next;
 				nat->port_taken[current->aux_ext-1024] = false;
@@ -124,6 +127,7 @@ void *sr_nat_timeout(void *nat_ptr)
 			}
 			else if((current->type == nat_mapping_tcp_new) && (diff > nat->tcp_new_ko))
 			{
+				printf("Removing NEW tcp mapping of internal port %d to external port %d\n", current->aux_int, current->aux_ext);
 				untouched = false;
 				previous->next = current->next;
 				nat->port_taken[current->aux_ext-1024] = false;
@@ -226,6 +230,7 @@ struct sr_nat_mapping *sr_nat_insert_mapping(struct sr_nat *nat, uint32_t ip_int
 			external = rand() % USEABLE_EXTERNALS;
 		}
 		nat->port_taken[external] = true;
+		printf("Making tcp nat mapping for internal port %d on external port %d\n", aux_int, external);
 	}
 	else if (type == nat_mapping_icmp)
 	{
@@ -235,10 +240,12 @@ struct sr_nat_mapping *sr_nat_insert_mapping(struct sr_nat *nat, uint32_t ip_int
 			external = rand() % USEABLE_EXTERNALS;
 		}
 		nat->icmp_id_taken[external] = true;
+		printf("Making ICMP nat mapping for internal identifier %d on external identifier %d\n", aux_int, external);
 	}
 	external = external + 1024;
 
 	struct sr_nat_mapping *mapping = malloc(sizeof(struct sr_nat_mapping));
+	bzero(mapping, sizeof(struct sr_nat_mapping));
 	mapping->ip_int = ip_int;
 	mapping->aux_int = aux_int;
 	mapping->aux_ext = external;
