@@ -76,7 +76,7 @@ int main(int argc, char **argv)
 
     printf("Using %s\n", VERSION_INFO);
 
-    while ((c = getopt(argc, argv, "hn:s:v:p:u:t:r:l:T:I:E:R")) != EOF)
+    while ((c = getopt(argc, argv, "h:s:v:p:u:t:r:l:T:n::I:E:R")) != EOF)
     {
         switch (c)
         {
