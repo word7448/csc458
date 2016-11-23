@@ -303,7 +303,7 @@ struct sr_nat_mapping *sr_nat_insert_mapping(struct sr_nat *nat, uint32_t ip_int
 			external = rand() % USEABLE_EXTERNALS;
 		}
 		nat->port_taken[external] = true;
-		printf("Making tcp nat mapping for internal port %d on external port %d\n", aux_int, external);
+		printf("Inserting tcp nat mapping for internal port %d on external port %d\n", aux_int, external);
 	}
 	else if (type == nat_mapping_icmp)
 	{
@@ -313,7 +313,7 @@ struct sr_nat_mapping *sr_nat_insert_mapping(struct sr_nat *nat, uint32_t ip_int
 			external = rand() % USEABLE_EXTERNALS;
 		}
 		nat->icmp_id_taken[external] = true;
-		printf("Making ICMP nat mapping for internal identifier %d on external identifier %d\n", aux_int, external);
+		printf("Inserting ICMP nat mapping for internal identifier %d on external identifier %d\n", aux_int, external);
 	}
 	external = external + 1024;
 
