@@ -236,12 +236,14 @@ struct sr_nat_mapping *sr_nat_lookup_external(struct sr_nat *nat, uint16_t aux_e
 {
 
 	pthread_mutex_lock(&(nat->lock));
+	printf("got an external nat request; looking for type %s for external port/identifier %d\n", get_nat_type(type), aux_ext);
 
 	/* handle lookup here, malloc and assign to copy */
 	struct sr_nat_mapping *pointer = nat->mappings;
 
 	while(pointer != NULL)
 	{
+		printf("inspecting aux-external %d, type %s\n", pointer->aux_int, get_nat_type(pointer->type));
 		if(pointer->aux_ext == aux_ext && pointer->type == type)
 		{
 			pointer->last_updated = time(NULL);
@@ -262,7 +264,7 @@ struct sr_nat_mapping *sr_nat_lookup_internal(struct sr_nat *nat, uint32_t ip_in
 
 	pthread_mutex_lock(&(nat->lock));
 
-	printf("got an internal nat request; looking for type %d for internal port/identifier %d for ip:\n", type, aux_int);
+	printf("got an internal nat request; looking for type %s for internal port/identifier %d for ip:\n", get_nat_type(type), aux_int);
 	print_addr_ip_int(ip_int);
 
 	/* handle lookup here, malloc and assign to copy. */
@@ -270,7 +272,7 @@ struct sr_nat_mapping *sr_nat_lookup_internal(struct sr_nat *nat, uint32_t ip_in
 
 	while(pointer != NULL)
 	{
-		printf("inspecting aux-internal %d, type %d, ip:\n", pointer->aux_int, pointer->type);
+		printf("inspecting aux-internal %d, type %s, ip:\n", pointer->aux_int, get_nat_type(pointer->type));
 		print_addr_ip_int(pointer->ip_int);
 		if(pointer->ip_int == ip_int && pointer->aux_int == aux_int && pointer->type == type)
 		{
@@ -327,4 +329,16 @@ struct sr_nat_mapping *sr_nat_insert_mapping(struct sr_nat *nat, uint32_t ip_int
 
 	pthread_mutex_unlock(&(nat->lock));
 	return mapping;
+}
+
+const char* get_nat_type(sr_nat_mapping_type nat_type)
+{
+	switch(nat_type)
+	{
+	case nat_mapping_icmp: return "nat_mapping_icmp";
+	case nat_mapping_tcp: return "nat_mapping_tcp";
+	case nat_mapping_tcp_old: return "nat_mapping_tcp_old";
+	case nat_mapping_tcp_new: return "nat_mapping_tcp_new";
+	default: return "bad sr_nat_mapping_type value";
+	}
 }
