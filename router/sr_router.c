@@ -253,6 +253,9 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
     struct sr_if *node = 0;
     node = sr->if_list;
     while(node){
+    	printf("handle_ip short circuit process inspecting node: %s, node->ip; ip_header->ip_dst\n", node->name);
+    	print_addr_ip_int(node->ip);
+    	print_addr_ip_int(ip_header->ip_dst);
         if(node->ip == ip_header->ip_dst){
             break;
         }
