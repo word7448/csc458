@@ -134,14 +134,14 @@ void handle_arp(struct sr_instance* sr, uint8_t * incoming_packet, unsigned int 
 
 	if(interface_listing == NULL)
 	{
-		printf("arp packet for unknown gateway. can't do anything\n");
+		/*printf("arp packet for unknown gateway. can't do anything\n");*/
 		return;
 	}
 
     if(ntohs(incoming_arp->ar_op) == arp_op_request)
     {
-    	printf("got an incoming arp request\n");
-    	print_hdrs(incoming_packet, incoming_len);
+    	/*printf("got an incoming arp request\n");
+    	print_hdrs(incoming_packet, incoming_len);*/
 
 		/*now that you have the mac for the ip, make a reply*/
 		int reply_size = sizeof(sr_ethernet_hdr_t) + sizeof(sr_arp_hdr_t);
@@ -169,21 +169,21 @@ void handle_arp(struct sr_instance* sr, uint8_t * incoming_packet, unsigned int 
 		reply_arp->ar_dest_ip = incoming_arp->ar_src_ip;
 
 		/*Print what's in the reply before sending it*/
-		printf("the arp request reply\n");
-		print_hdrs(reply, reply_size);
+		/*printf("the arp request reply\n");
+		print_hdrs(reply, reply_size);*/
 
 		/*send it*/
 		int result = sr_send_packet(sr, reply, reply_size, incoming_interface);
 		if (result != 0)
 		{
-			fprintf(stderr, "error has occurred sending the packet.\n");
+			fprintf(stderr, "ARP: error has occurred sending the packet.\n");
 		}
 		free(reply);
     }
     else if (ntohs(incoming_arp->ar_op) == arp_op_reply)
     {
-    	printf("got an incoming arp reply\n");
-    	print_hdrs(incoming_packet, incoming_len);
+    	/*printf("got an incoming arp reply\n");
+    	print_hdrs(incoming_packet, incoming_len);*/
 
     	/*BLINDLY add it to the arp cache*/
 		struct sr_arpreq *arp_reply_backlog;
@@ -201,19 +201,19 @@ void handle_arp(struct sr_instance* sr, uint8_t * incoming_packet, unsigned int 
 				memcpy(backlog_eheader->ether_dhost, incoming_arp->ar_src_mac, 6);
 				memcpy(backlog_eheader->ether_shost, sr_get_interface(sr, backlog_packet->iface)->mac, 6);
 
-				printf("sending out backlog packet: \n");
-				print_hdrs(backlog_packet->buf, backlog_packet->len);
+				/*printf("sending out backlog packet: \n");
+				print_hdrs(backlog_packet->buf, backlog_packet->len);*/
 				sr_send_packet(sr, backlog_packet->buf, backlog_packet->len, backlog_packet->iface);
 
 				backlog_packet = backlog_packet->next;
 			}
 			/*backlog has been completed, get rid of this request*/
-			printf("backlog pointer %p fulfilled\n", arp_reply_backlog);
+			/*printf("backlog pointer %p fulfilled\n", arp_reply_backlog);*/
 			sr_arpreq_destroy(&(sr->cache), arp_reply_backlog);
 		}
 		else
 		{
-			printf("no backlog to process\n");
+			/*printf("no backlog to process\n");*/
 		}
     }
 }
@@ -352,7 +352,7 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
             else if(ip_type == ip_protocol_tcp){
                 /*get TCP Header*/
                 sr_tcp_hdr_t *tcp_header = (sr_tcp_hdr_t *) (packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_tcp_hdr_t));
-                
+
                 struct sr_nat_mapping *mapping = sr_nat_lookup_internal(&(sr->the_nat), ip_header->ip_src, tcp_header->src_port, nat_mapping_tcp);
                 struct sr_if *external_interface = sr_get_interface(sr, "eth2");
                 if (!mapping) {
@@ -428,7 +428,7 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
                     ip_header->ip_src = external_interface->ip;
                 }
                 
-                tcp_header->src_port = htons(mapping->aux_ext);
+                tcp_header->src_port = mapping->aux_ext;
                 
                 
                 ip_header->ip_sum = 0;
@@ -453,6 +453,7 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
                     memcpy(reply_ethernet_header->ether_shost, sr_interface_instance->mac, sizeof(uint8_t)*ETHER_ADDR_LEN);
                     reply_ethernet_header->ether_type = ethernet_header->ether_type;
                     
+                    printf("Sending lan --> wan out interface: %s\n", sr_interface_instance->name);
                     sr_send_packet(sr, packet, len, sr_interface_instance->name);
                     free(entry);
                     
@@ -653,7 +654,10 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
                         break;
                 }
             }
-            
+            else
+            {
+            	printf("Got a packet on the router wan probably for something inside\n");
+            }
         }
 
         return; /*when in nat mode, stay in nat mode code*/
@@ -949,19 +953,19 @@ void send_icmp(struct sr_instance* sr, char* interface, uint8_t * packet, sr_ip_
 /*generates an arp request for the packet and asks handle_arp to take care of it*/
 void handle_qreq(struct sr_instance *sr, struct sr_arpreq *request)
 {
-	printf("handling arp request pointer %p\n", request);
+	/*printf("handling arp request pointer %p\n", request);*/
 	time_t now = time(NULL); /*DT* in seconds since new years 1970*/
 	time_t diff = now - request->sent; /*OH* supposed to be "now -" not "now =" right? */
 
 	if (request->times_sent >= 5)
 	{
 		int doable = 0;
-		printf("request has exceeded 5x limit\n");
+		/*printf("request has exceeded 5x limit\n");*/
 		struct sr_packet *failed_packet = request->packets;
 		while (failed_packet != NULL)
 		{
-			printf("mailing out failure for packet: \n");
-			print_hdrs(failed_packet->buf, failed_packet->len);
+			/*printf("mailing out failure for packet: \n");
+			print_hdrs(failed_packet->buf, failed_packet->len);*/
 
 			/*get the ip of the failed packet based on whether it's ip or arp*/
 			sr_ip_hdr_t *orig_ipheader = (sr_ip_hdr_t*) (failed_packet->buf + sizeof(sr_ethernet_hdr_t));
@@ -1009,15 +1013,15 @@ void handle_qreq(struct sr_instance *sr, struct sr_arpreq *request)
 				struct sr_arpentry *sender = sr_arpcache_lookup(&(sr->cache), orig_ipheader->ip_src);
 				if(sender != NULL)
 				{
-					printf("sender info found\n");
+					/*printf("sender info found\n");*/
 					doable = 1;
 
 					/*set the ethernet header*/
 					memcpy(fail_eheader->ether_dhost, sender->mac, 6);
 					memcpy(fail_eheader->ether_shost, sr_get_interface(sr, best_match->interface)->mac, 6);
 
-					printf("failure to be mailed out:\n");
-					print_hdrs(fail, fail_length);
+					/*printf("failure to be mailed out:\n");
+					print_hdrs(fail, fail_length);*/
 					sr_send_packet(sr, fail, fail_length, best_match->interface);
 					free(fail);
 
@@ -1025,7 +1029,7 @@ void handle_qreq(struct sr_instance *sr, struct sr_arpreq *request)
 				}
 				else
 				{
-					printf("no cache entry on the sender. wait for cache\n");
+					/*printf("no cache entry on the sender. wait for cache\n");*/
 					struct sr_arpreq *request = sr_arpcache_queuereq(&(sr->cache), orig_ipheader->ip_src, fail, fail_length, best_match->interface);
 					handle_qreq(sr, request);
 					break;
@@ -1033,19 +1037,19 @@ void handle_qreq(struct sr_instance *sr, struct sr_arpreq *request)
 			}
 			else
 			{
-				printf("no gateway match to mail out failure\n");
+				/*printf("no gateway match to mail out failure\n");*/
 			}
 
 		}
 		/*only remove the request if sender info was available to mail failures*/
 		if(doable)
 		{
-			printf("request pointer %p was doable\n", request);
+			/*printf("request pointer %p was doable\n", request);*/
 			sr_arpreq_destroy(&(sr->cache), request); /*DT* this request is hopeless. failures have been sent. get rid of it*/
 		}
 		else
 		{
-			printf("request pointer %p was NOT doable\n", request);
+			/*printf("request pointer %p was NOT doable\n", request);*/
 		}
 	}
 	else if (diff >= 1)
@@ -1056,9 +1060,9 @@ void handle_qreq(struct sr_instance *sr, struct sr_arpreq *request)
 
 		struct sr_packet *first_packet = request->packets;
 
-		printf("sending out arp request for the first packet in the request list\n");
+		/*printf("sending out arp request for the first packet in the request list\n");
 		printf("first packet contents:\n");
-		print_hdrs(first_packet->buf, first_packet->len);
+		print_hdrs(first_packet->buf, first_packet->len);*/
 
 		int arp_request_size = sizeof(sr_ethernet_hdr_t) + sizeof(sr_arp_hdr_t);
 		uint8_t *arp_request = malloc(arp_request_size);
@@ -1082,8 +1086,8 @@ void handle_qreq(struct sr_instance *sr, struct sr_arpreq *request)
 		memcpy(request_aheader->ar_dest_mac, mac_broadcast, 6);
 		request_aheader->ar_dest_ip = request->ip;
 
-		printf("helper Qreq arp request headers\n");
-		print_hdrs(arp_request, arp_request_size);
+		/*printf("helper Qreq arp request headers\n");
+		print_hdrs(arp_request, arp_request_size);*/
 
 		/*send the arp request for the first packet from the interface it came from*/
 		sr_send_packet(sr, arp_request, arp_request_size, first_packet->iface);
@@ -1092,7 +1096,7 @@ void handle_qreq(struct sr_instance *sr, struct sr_arpreq *request)
 	}
 	else
 	{
-		printf("difference is less than 1 (%ld). it's too soon to try again\n", diff);
+		/*printf("difference is less than 1 (%ld). it's too soon to try again\n", diff);*/
 	}
 }
 
