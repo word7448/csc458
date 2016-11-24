@@ -473,65 +473,187 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
 		/* Received packet from outside */
         else if (strncmp(interface, "eth2", 5) == 0) {
             fprintf(stdout,"External host reply/connection attempt\n");
-			print_hdrs(packet, len);
-
-			switch (ip_type) {
-				case ip_protocol_tcp: {
-					fprintf(stdout, "Got a TCP on ext int\n");
-
-					sr_tcp_hdr_t *tcp_header = (sr_tcp_hdr_t*)(packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
-					struct sr_nat_mapping *extmapping = sr_nat_lookup_external(&(sr->the_nat), tcp_header->dst_port, nat_mapping_tcp);
-					/* Unsolicited connection, drop packet */
-					if (!extmapping) {
-						fprintf(stdout, "No external mappings for this TCP packet, dropping...\n");
-						/* Is this the start of a memory leak? Do I have to free packet? */
-						/*free(packet);*/
-						return;
-					}
-					break;
-				}
-				case ip_protocol_icmp: {
-					fprintf(stdout, "Got an ICMP on ext int\n");
-					sr_icmp_tping_hdr_t *icmp_header = (sr_icmp_tping_hdr_t*)(packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
-					struct sr_nat_mapping *extmapping = sr_nat_lookup_external(&(sr->the_nat), icmp_header->identifier, nat_mapping_icmp);
-					/* Unsolicited connection, drop packet */
-					if (!extmapping) {
-						fprintf(stdout, "No external mappings for this ICMP packet, dropping...\n");
-						/* Is this the start of a memory leak? Do I have to free packet? */
-						/*free(packet);*/
-						return;
-					}
-
-					/* Modify ICMP header */
-					icmp_header->identifier = extmapping->aux_int; /* Comes in network byte order already */
-					icmp_header->icmp_sum = 0;
-					icmp_header->icmp_sum = cksum(icmp_header, len - sizeof(sr_ethernet_hdr_t) - sizeof(sr_ip_hdr_t));
-
-					/* Modify IP header */
-					ip_header->ip_dst = extmapping->ip_int; /* Comes in network byte order already */
-					/*ip_header->ip_src = sr_get_interface(sr, "eth1")->ip; /* Magic: is in network byte order */
-					ip_header->ip_sum = 0;
-					ip_header->ip_sum = cksum(ip_header, sizeof(sr_ip_hdr_t));
-
-					/* Modify ethernet header */
-					memcpy(ethernet_header->ether_shost, sr_get_interface(sr, "eth1")->mac, 6);
-					print_addr_ip_int(extmapping->ip_int);
-					struct sr_arpentry *entry = sr_arpcache_lookup(&sr->cache, extmapping->ip_int);
-					/* make arp request here if no entry found */
-
-					if (entry) {
-						memcpy(ethernet_header->ether_dhost, entry->mac, 6);
-						print_hdrs(packet, len);
-						sr_send_packet(sr, packet, len, "eth1");
-						return;
-					}
-					break;
-				}
-				default:
-					fprintf(stdout, "Unsupported protocol (not ICMP or TCP)");
-			}
-
-			return;
+            print_hdrs(packet, len);
+            
+            if (node){
+                
+                switch (ip_type) {
+                        
+                    case ip_protocol_tcp: {
+                        sr_tcp_hdr_t *tcp_header = (sr_tcp_hdr_t *) (packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_tcp_hdr_t));
+                        
+                        struct sr_nat_mapping *mapping = sr_nat_lookup_external(&(sr->the_nat), ntohs(tcp_header->dst_port), nat_mapping_tcp);
+                        if (mapping == NULL) {
+                            printf("Mapping is NULL\n");
+                            return;
+                        }
+                        mapping->last_updated = time(NULL);
+                        
+                        /* Critical section, make sure you lock, careful modifying code under critical section. */
+                        pthread_mutex_lock(&((sr->the_nat).lock));
+                        /*Find Connection, could be factored out into a function*/
+                        struct sr_nat_connection *currConn = mapping->conns;
+                        
+                        while (currConn != NULL) {
+                            if (currConn->ip == ip_header->ip_dst) {
+                                break;
+                            }
+                            currConn = currConn->next;
+                        }
+                        
+                        if (!currConn) {
+                            currConn = sr_nat_insert_tcp_con(mapping, ip_header->ip_dst);
+                        }
+                        currConn->last_update = time(NULL);
+                        
+                        
+                        if (currConn->state == tcp_state_closed) {
+                            if (ntohl(tcp_header->ack_num) == 0 && tcp_header->syn && !tcp_header->ack) {
+                                currConn->isn_client = ntohl(tcp_header->seq_num);
+                                currConn->state = tcp_state_syn_sent;
+                            }
+                        }
+                        
+                        else if(currConn->state == tcp_state_established){
+                            
+                            if (tcp_header->fin && tcp_header->ack) {
+                                currConn->isn_client = ntohl(tcp_header->seq_num);
+                                currConn->state = tcp_state_closed;
+                            }
+                        }
+                        
+                        else if(currConn->state == tcp_state_syn_received){
+                            
+                            if (ntohl(tcp_header->seq_num) == currConn->isn_client + 1 && ntohl(tcp_header->ack_num) == currConn->isn_server + 1 && !tcp_header->syn) {
+                                currConn->isn_client = ntohl(tcp_header->seq_num);
+                                currConn->state = tcp_state_established;
+                            }
+                            
+                            struct sr_tcp_syn *incoming = sr->the_nat.incoming;
+                            while (incoming){
+                                if ((incoming->ip_src == ip_header->ip_src) && (incoming->src_port == tcp_header->src_port)){
+                                    break;
+                                }
+                                incoming = incoming->next;
+                            }
+                            
+                            if (!incoming){
+                                struct sr_tcp_syn *new = (struct sr_tcp_syn *) malloc(sizeof(struct sr_tcp_syn));
+                                new->ip_src = ip_header->ip_src;
+                                new->src_port = tcp_header->src_port;
+                                new->last_received = time(NULL);
+                                new->len = len;
+                                new->packet = (uint8_t *) malloc(len);
+                                memcpy(new->packet, packet, len);
+                                new->next = sr->the_nat.incoming;
+                                sr->the_nat.incoming = new;
+                            }
+                        }
+                        
+                        pthread_mutex_unlock(&((sr->the_nat).lock));
+                        /* End of critical section. */
+                        
+                        ip_header->ip_dst = mapping->ip_int;
+                        tcp_header->dst_port = mapping->aux_int;
+                        
+                        ip_header->ip_sum = 0;
+                        ip_header->ip_sum = cksum(ip_header, sizeof(sr_ip_hdr_t));
+                        tcp_header->checksum = tcp_cksum(ip_header, tcp_header, len);
+                        
+                        struct sr_rt *prefix_match = longest_prefix_match(sr, ip_header->ip_dst);
+                        if (prefix_match){
+                            printf("Found the match in routing table\n");
+                            struct sr_arpentry *entry = sr_arpcache_lookup(&sr->cache, prefix_match->gw.s_addr);
+                            if (entry){
+                                printf("Found the ARP in the cache\n");
+                                
+                                struct sr_if *router_if = sr_get_interface(sr, prefix_match->interface);
+                                
+                                /* Make ethernet header */
+                                sr_ethernet_hdr_t *reply_ethernet_header = (sr_ethernet_hdr_t *)packet;
+                                memcpy(reply_ethernet_header->ether_dhost, entry->mac, sizeof(unsigned char)*6);
+                                memcpy(reply_ethernet_header->ether_shost, router_if->mac, sizeof(uint8_t)*ETHER_ADDR_LEN);
+                                reply_ethernet_header->ether_type = ethernet_header->ether_type;
+                                
+                                print_hdrs(packet, len);
+                                sr_send_packet(sr, packet, len, router_if->name);
+                                free(entry);
+                                
+                            } else {
+                                printf("ARP Cache miss\n");
+                                struct sr_arpreq *req = sr_arpcache_queuereq(&(sr->cache), ip_header->ip_dst, packet, len, prefix_match->interface);
+                                handle_qreq(sr, req);
+                                
+                            }
+                        }
+                        break;
+                    }
+                        
+                    case ip_protocol_icmp: {
+                        fprintf(stdout, "Got an ICMP on ext int\n");
+                        sr_icmp_tping_hdr_t *icmp_header = (sr_icmp_tping_hdr_t*)(packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
+                        struct sr_nat_mapping *extmapping = sr_nat_lookup_external(&(sr->the_nat), icmp_header->identifier, nat_mapping_icmp);
+                        /* Unsolicited connection, drop packet */
+                        if (!extmapping) {
+                            fprintf(stdout, "No external mappings for this ICMP packet, dropping...\n");
+                            /* Is this the start of a memory leak? Do I have to free packet? */
+                            /*free(packet);*/
+                            return;
+                        }
+                        /* Modify ICMP header */
+                        icmp_header->identifier = extmapping->aux_int; /* Comes in network byte order already */
+                        icmp_header->icmp_sum = 0;
+                        icmp_header->icmp_sum = cksum(icmp_header, len - sizeof(sr_ethernet_hdr_t) - sizeof(sr_ip_hdr_t));
+                        
+                        /* Modify IP header */
+                        ip_header->ip_dst = extmapping->ip_int; /* Comes in network byte order already */
+                        /*ip_header->ip_src = sr_get_interface(sr, "eth1")->ip;  Magic: is in network byte order */
+                        ip_header->ip_sum = 0;
+                        ip_header->ip_sum = cksum(ip_header, sizeof(sr_ip_hdr_t));
+                        
+                        /* Modify ethernet header */
+                        memcpy(ethernet_header->ether_shost, sr_get_interface(sr, "eth1")->mac, 6);
+                        print_addr_ip_int(extmapping->ip_int);
+                        
+                        struct sr_rt *prefix_match = longest_prefix_match(sr, ip_header->ip_dst);
+                        if (prefix_match){
+                            printf("Found the match in routing table\n");
+                            struct sr_arpentry *entry = sr_arpcache_lookup(&sr->cache, prefix_match->gw.s_addr);
+                            if (entry){
+                                printf("Found the ARP in the cache\n");
+                                
+                                struct sr_if *router_if = sr_get_interface(sr, prefix_match->interface);
+                                
+                                /* Make ethernet header */
+                                sr_ethernet_hdr_t *reply_ethernet_header = (sr_ethernet_hdr_t *)packet;
+                                memcpy(ethernet_header->ether_dhost, entry->mac, 6);
+                                memcpy(reply_ethernet_header->ether_shost, router_if->mac, sizeof(uint8_t)*ETHER_ADDR_LEN);
+                                reply_ethernet_header->ether_type = ethernet_header->ether_type;
+                                
+                                print_hdrs(packet, len);
+                                sr_send_packet(sr, packet, len, router_if->name);
+                                free(entry);
+                            }
+                            else{
+                                printf("ARP Cache miss\n");
+                                struct sr_arpreq *req = sr_arpcache_queuereq(&(sr->cache), ip_header->ip_dst, packet, len, prefix_match->interface);
+                                handle_qreq(sr, req);
+                            }
+                        }
+                        else{
+                            fprintf(stdout,"No match. Sending ICMP net unreachable...\n");
+                            
+                            send_icmp(sr, interface, packet, ip_header,len, ICMP_UNREACHABLE, ICMP_ECHO_REPLY, false);
+                        }
+                        break;
+                    }
+                        
+                    default:
+                        fprintf(stdout, "Unsupported protocol (not ICMP or TCP)");
+                        break;
+                }
+            }
+            
         }
 
         return; /*when in nat mode, stay in nat mode code*/
@@ -726,7 +848,6 @@ void send_icmp(struct sr_instance* sr, char* interface, uint8_t * packet, sr_ip_
 		ip_header->ip_src = ip_header->ip_dst;
 		ip_header->ip_dst = new_dest;
 		/*DT: will cause duplicate responses because when the response comes back, it will send the reply again*/
-		sr_arpcache_queuereq(&sr->cache, ip_header->ip_dst, packet, len, interface);
 		sr_send_packet(sr, packet, len, interface);
 		return;
 	}
