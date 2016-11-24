@@ -294,7 +294,7 @@ struct sr_nat_mapping *sr_nat_insert_mapping(struct sr_nat *nat, uint32_t ip_int
 
 	pthread_mutex_lock(&(nat->lock));
 
-	int external;
+	int external = 0;
 	if (type == nat_mapping_tcp_new) /*you're never going to be inserting an established/old tcp mapping*/
 	{
 		external = rand() % USEABLE_EXTERNALS;
