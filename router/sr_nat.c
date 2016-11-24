@@ -58,11 +58,11 @@ int sr_nat_destroy(struct sr_nat *nat)
 		/*reset the "taken" array*/
 		if(current_mapping->type == nat_mapping_icmp)
 		{
-			nat->icmp_id_taken[current_mapping->aux_ext-1024] = false;
+			nat->icmp_id_taken[ntohs(current_mapping->aux_ext)-1024] = false;
 		}
 		else
 		{
-			nat->port_taken[current_mapping->aux_ext-1024] = false;
+			nat->port_taken[ntohs(current_mapping->aux_ext)-1024] = false;
 		}
 
 		/*remove the mapping's connection and then itself*/
@@ -117,7 +117,7 @@ void *sr_nat_timeout(void *nat_ptr)
 			diff = now - current->last_updated;
 			if ((current->type == nat_mapping_icmp) && (diff > nat->icmp_ko))
 			{
-				printf("Removing ICMP mapping of internal identifier %d to external identifier %d\n", current->aux_int, current->aux_ext);
+				printf("Removing ICMP mapping of internal identifier %d (%d) to external identifier %d\n", current->aux_int, current->aux_ext, ntohs(current->aux_ext));
 				untouched = false;
 				if (head_mode)
 				{/*for the head of the list, replace the actual head of the_nat->mappings*/
@@ -127,7 +127,7 @@ void *sr_nat_timeout(void *nat_ptr)
 				{/*for an entry that is in the middle of the list, splice it out*/
 					previous->next = current->next;
 				}
-				nat->icmp_id_taken[current->aux_ext - 1024] = false;
+				nat->icmp_id_taken[ntohs(current->aux_ext) - 1024] = false;
 				remove_nat_connections(current->conns);
 				free(current);
 				if (head_mode)
@@ -146,7 +146,7 @@ void *sr_nat_timeout(void *nat_ptr)
 			}
 			else if ((current->type == nat_mapping_tcp_old) && (diff > nat->tcp_old_ko))
 			{
-				printf("Removing OLD tcp mapping of internal port %d to external port %d\n", current->aux_int, current->aux_ext);
+				printf("Removing OLD tcp mapping of internal port %d (%d) to external port %d\n", current->aux_int, current->aux_ext, ntohs(current->aux_ext));
 				untouched = false;
 				if (head_mode)
 				{/*for the head of the list, replace the actual head of the_nat->mappings*/
@@ -156,7 +156,7 @@ void *sr_nat_timeout(void *nat_ptr)
 				{/*for an entry that is in the middle of the list, splice it out*/
 					previous->next = current->next;
 				}
-				nat->port_taken[current->aux_ext - 1024] = false;
+				nat->port_taken[ntohs(current->aux_ext) - 1024] = false;
 				remove_nat_connections(current->conns);
 				free(current);
 				if (head_mode)
@@ -175,7 +175,7 @@ void *sr_nat_timeout(void *nat_ptr)
 			}
 			else if ((current->type == nat_mapping_tcp_new) && (diff > nat->tcp_new_ko))
 			{
-				printf("Removing NEW tcp mapping of internal port %d to external port %d\n", current->aux_int, current->aux_ext);
+				printf("Removing NEW tcp mapping of internal port %d (%d) to external port %d\n", current->aux_int, current->aux_ext, ntohs(current->aux_ext));
 				untouched = false;
 				if (head_mode)
 				{/*for the head of the list, replace the actual head of the_nat->mappings*/
@@ -185,7 +185,7 @@ void *sr_nat_timeout(void *nat_ptr)
 				{/*for an entry that is in the middle of the list, splice it out*/
 					previous->next = current->next;
 				}
-				nat->port_taken[current->aux_ext - 1024] = false;
+				nat->port_taken[ntohs(current->aux_ext) - 1024] = false;
 				remove_nat_connections(current->conns);
 				free(current);
 				if (head_mode)
@@ -236,7 +236,7 @@ struct sr_nat_mapping *sr_nat_lookup_external(struct sr_nat *nat, uint16_t aux_e
 {
 
 	pthread_mutex_lock(&(nat->lock));
-	printf("got an external nat request; looking for type %s for external port/identifier %d\n", get_nat_type(type), aux_ext);
+	printf("got an external nat request; looking for type %s for external port/identifier %d (%d)\n", get_nat_type(type), aux_ext, ntohs(aux_ext));
 
 	/* handle lookup here, malloc and assign to copy */
 	struct sr_nat_mapping *pointer = nat->mappings;
@@ -264,7 +264,7 @@ struct sr_nat_mapping *sr_nat_lookup_internal(struct sr_nat *nat, uint32_t ip_in
 
 	pthread_mutex_lock(&(nat->lock));
 
-	printf("got an internal nat request; looking for type %s for internal port/identifier %d for ip:\n", get_nat_type(type), aux_int);
+	printf("got an internal nat request; looking for type %s for internal port/identifier %d (%d) for ip:\n", get_nat_type(type), aux_int, ntohs(aux_int));
 	print_addr_ip_int(ip_int);
 
 	/* handle lookup here, malloc and assign to copy. */
@@ -321,7 +321,7 @@ struct sr_nat_mapping *sr_nat_insert_mapping(struct sr_nat *nat, uint32_t ip_int
 	bzero(mapping, sizeof(struct sr_nat_mapping));
 	mapping->ip_int = ip_int;
 	mapping->aux_int = aux_int;
-	mapping->aux_ext = external;
+	mapping->aux_ext = htons(external);
 	mapping->type = type;
 	mapping->last_updated = time(NULL);
 	mapping->next = nat->mappings; /*put the new one at the front of the list*/
