@@ -749,8 +749,8 @@ void send_icmp(struct sr_instance* sr, char* interface, uint8_t * packet, sr_ip_
     
     /* build ethernet header */
     sr_ethernet_hdr_t *response_ethernet_header = (sr_ethernet_hdr_t *)response_packet;
-    memcpy(response_ethernet_header->ether_dhost, ethernet_header->ether_shost, sizeof(sr_ethernet_hdr_t));
-    memcpy(response_ethernet_header->ether_shost, ethernet_header->ether_dhost, sizeof(sr_ethernet_hdr_t));
+    memcpy(response_ethernet_header->ether_dhost, ethernet_header->ether_shost, 6);
+    memcpy(response_ethernet_header->ether_shost, ethernet_header->ether_dhost, 6);
     response_ethernet_header->ether_type = htons(ethertype_ip);
     
     
