@@ -615,37 +615,15 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
                         /* Modify ethernet header */
                         memcpy(ethernet_header->ether_shost, sr_get_interface(sr, "eth1")->mac, 6);
                         print_addr_ip_int(extmapping->ip_int);
-                        
-                        struct sr_rt *prefix_match = longest_prefix_match(sr, ip_header->ip_dst);
-                        if (prefix_match){
-                            printf("Found the match in routing table\n");
-                            struct sr_arpentry *entry = sr_arpcache_lookup(&sr->cache, prefix_match->gw.s_addr);
-                            if (entry){
-                                printf("Found the ARP in the cache\n");
-                                
-                                struct sr_if *router_if = sr_get_interface(sr, prefix_match->interface);
-                                
-                                /* Make ethernet header */
-                                sr_ethernet_hdr_t *reply_ethernet_header = (sr_ethernet_hdr_t *)packet;
-                                memcpy(ethernet_header->ether_dhost, entry->mac, 6);
-                                memcpy(reply_ethernet_header->ether_shost, router_if->mac, sizeof(uint8_t)*ETHER_ADDR_LEN);
-                                reply_ethernet_header->ether_type = ethernet_header->ether_type;
-                                
-                                print_hdrs(packet, len);
-                                sr_send_packet(sr, packet, len, router_if->name);
-                                free(entry);
-                            }
-                            else{
-                                printf("ARP Cache miss\n");
-                                struct sr_arpreq *req = sr_arpcache_queuereq(&(sr->cache), ip_header->ip_dst, packet, len, prefix_match->interface);
-                                handle_qreq(sr, req);
-                            }
+                        struct sr_arpentry *entry = sr_arpcache_lookup(&sr->cache, extmapping->ip_int);
+                        /* make arp request here if no entry found */
+                        if (entry) {
+                            memcpy(ethernet_header->ether_dhost, entry->mac, 6);
+                            print_hdrs(packet, len);
+                            sr_send_packet(sr, packet, len, "eth1");
+                            return;
                         }
-                        else{
-                            fprintf(stdout,"No match. Sending ICMP net unreachable...\n");
-                            
-                            send_icmp(sr, interface, packet, ip_header,len, ICMP_UNREACHABLE, ICMP_ECHO_REPLY, false);
-                        }
+                        /*might need to jump to arp cache being lazy for now*/
                         break;
                     }
                         
