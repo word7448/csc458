@@ -330,7 +330,6 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
                 
                 /*if mapping doesn't exist insert it*/
                 if (!mapping){
-					ntohs(icmp_header->identifier);
                     mapping = sr_nat_insert_mapping(&(sr->the_nat), ip_header->ip_src, icmp_header->identifier, nat_mapping_icmp);
                     mapping->ip_ext = external_interface->ip;
                 }
@@ -354,7 +353,7 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
                 /*get TCP Header*/
                 sr_tcp_hdr_t *tcp_header = (sr_tcp_hdr_t *) (packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_tcp_hdr_t));
                 
-                struct sr_nat_mapping *mapping = sr_nat_lookup_internal(&(sr->the_nat), ip_header->ip_src, ntohs(tcp_header->src_port), nat_mapping_tcp);
+                struct sr_nat_mapping *mapping = sr_nat_lookup_internal(&(sr->the_nat), ip_header->ip_src, tcp_header->src_port, nat_mapping_tcp);
                 struct sr_if *external_interface = sr_get_interface(sr, "eth2");
                 if (!mapping) {
                     mapping = sr_nat_insert_mapping(&(sr->the_nat), ip_header->ip_src, tcp_header->src_port, nat_mapping_tcp);
@@ -481,7 +480,7 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
 					fprintf(stdout, "Got a TCP on ext int\n");
 
 					sr_tcp_hdr_t *tcp_header = (sr_tcp_hdr_t*)(packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
-					struct sr_nat_mapping *extmapping = sr_nat_lookup_external(&(sr->the_nat), ntohs(tcp_header->dst_port), nat_mapping_tcp);
+					struct sr_nat_mapping *extmapping = sr_nat_lookup_external(&(sr->the_nat), tcp_header->dst_port, nat_mapping_tcp);
 					/* Unsolicited connection, drop packet */
 					if (!extmapping) {
 						fprintf(stdout, "No external mappings for this TCP packet, dropping...\n");
@@ -494,7 +493,6 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
 				case ip_protocol_icmp: {
 					fprintf(stdout, "Got an ICMP on ext int\n");
 					sr_icmp_tping_hdr_t *icmp_header = (sr_icmp_tping_hdr_t*)(packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
-					icmp_header->identifier;
 					struct sr_nat_mapping *extmapping = sr_nat_lookup_external(&(sr->the_nat), icmp_header->identifier, nat_mapping_icmp);
 					/* Unsolicited connection, drop packet */
 					if (!extmapping) {
@@ -516,13 +514,13 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
 					ip_header->ip_sum = cksum(ip_header, sizeof(sr_ip_hdr_t));
 
 					/* Modify ethernet header */
-					memcpy(sr_get_interface(sr, "eth1")->mac, ethernet_header->ether_shost, sizeof(sr_ethernet_hdr_t));
+					memcpy(ethernet_header->ether_shost, sr_get_interface(sr, "eth1")->mac, 6);
 					print_addr_ip_int(extmapping->ip_int);
 					struct sr_arpentry *entry = sr_arpcache_lookup(&sr->cache, extmapping->ip_int);
 					/* make arp request here if no entry found */
 
 					if (entry) {
-						memcpy(entry->mac, ethernet_header->ether_dhost, sizeof(sr_ethernet_hdr_t));
+						memcpy(ethernet_header->ether_dhost, entry->mac, 6);
 						print_hdrs(packet, len);
 						sr_send_packet(sr, packet, len, "eth1");
 						return;
@@ -535,6 +533,8 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
 
 			return;
         }
+
+        return; /*when in nat mode, stay in nat mode code*/
     }
 
     /* NAT CODE END */
