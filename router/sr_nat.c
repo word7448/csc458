@@ -227,7 +227,8 @@ void *sr_nat_timeout(void *sr_ptr)
 				bzero(macs, sizeof(sr_ethernet_hdr_t));
 				memcpy(macs->ether_shost, sr_get_interface(sr, "eth2")->mac, 6);
 				memcpy(macs->ether_dhost, original->ether_shost, 6);
-				send_icmp(sr, "eth2", macs, current->orig_ether_ip, size, ICMP_UNREACHABLE, 3, 0);
+				sr_ip_hdr_t *original_ip = (sr_ip_hdr_t*)(current->orig_ether_ip+sizeof(sr_ethernet_hdr_t));
+				send_icmp(sr, "eth2", (uint8_t*)macs, original_ip, size, ICMP_UNREACHABLE, 3, 0);
 
 				free(current->orig_ether_ip); /*the only time this field is used*/
 				free(current);
