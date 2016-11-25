@@ -342,6 +342,8 @@ struct sr_nat_mapping *sr_nat_insert_mapping(struct sr_nat *nat, uint32_t ip_int
 	/*setup mapping struct*/
 	struct sr_nat_mapping *mapping = malloc(sizeof(struct sr_nat_mapping));
 	bzero(mapping, sizeof(struct sr_nat_mapping));
+	mapping->last_updated = time(NULL);
+
 	int external = 0;
 
 	/*the normal case of making a mapping*/
@@ -373,7 +375,6 @@ struct sr_nat_mapping *sr_nat_insert_mapping(struct sr_nat *nat, uint32_t ip_int
 		mapping->aux_int = aux_int;
 		mapping->aux_ext = htons(external);
 		mapping->type = type;
-		mapping->last_updated = time(NULL);
 		mapping->next = nat->mappings; /*put the new one at the front of the list*/
 		nat->mappings = mapping;
 	}
@@ -394,6 +395,7 @@ struct sr_nat_mapping *sr_nat_insert_mapping(struct sr_nat *nat, uint32_t ip_int
 		mapping->aux_int = aux_int;
 		mapping->orig_ether_ip = malloc(partial_size);
 		memcpy(mapping->orig_ether_ip, original, partial_size);
+		nat->mappings = mapping;
 	}
 
 
