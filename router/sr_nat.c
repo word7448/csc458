@@ -6,12 +6,14 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include "sr_router.h"
 
-int sr_nat_init(struct sr_instance *sr, int icmp_ko, int tcp_new_ko, int tcp_old_ko)
+int sr_nat_init(void *sr_ptr, int icmp_ko, int tcp_new_ko, int tcp_old_ko)
 { /* Initializes the nat */
 
-	assert(sr);
-	struct sr_nat *nat = sr->the_nat;
+	assert(sr_ptr);
+	struct sr_instance *sr = (struct sr_instance*)sr_ptr;
+	struct sr_nat *nat = &(sr->the_nat);
 
 	/* Acquire mutex lock */
 	pthread_mutexattr_init(&(nat->attr));
@@ -94,7 +96,7 @@ int sr_nat_destroy(struct sr_nat *nat)
 void *sr_nat_timeout(void *sr_ptr)
 { /* Periodic Timout handling */
 	struct sr_instance *sr = (struct sr_instance*)sr_ptr;
-	struct sr_nat *nat = sr->the_nat;
+	struct sr_nat *nat = &(sr->the_nat);
 	while (1)
 	{
 		sleep(1.0);

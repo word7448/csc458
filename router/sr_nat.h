@@ -5,7 +5,6 @@
 #include <time.h>
 #include <pthread.h>
 #include <stdbool.h>
-#include "sr_router.h"
 
 #define USEABLE_EXTERNALS 64511
 
@@ -88,7 +87,7 @@ struct sr_nat
 	pthread_t thread;
 };
 
-int sr_nat_init(struct sr_instance *sr, int icmp_ko, int tcp_new_ko, int tcp_old_ko);
+int sr_nat_init(void *sr_ptr, int icmp_ko, int tcp_new_ko, int tcp_old_ko);
 int sr_nat_destroy(struct sr_nat *nat); /* Destroys the nat (free memory) */
 void *sr_nat_timeout(void *sr_ptr); /* Periodic Timout */
 
