@@ -157,6 +157,18 @@ void print_hdr_ip(uint8_t *buf) {
   print_addr_ip_int(ntohl(iphdr->ip_dst));
 }
 
+/*prints out just the source and destination addresses*/
+void print_addrs(uint8_t *buf, uint32_t length)
+{
+	sr_ip_hdr_t *iphdr = (buf + sizeof(sr_ethernet_hdr_t));
+
+	fprintf(stderr, "\tsource: ");
+	print_addr_ip_int(ntohl(iphdr->ip_src));
+
+	fprintf(stderr, "\tdestination: ");
+	print_addr_ip_int(ntohl(iphdr->ip_dst));
+}
+
 /* Prints out ICMP header fields */
 void print_hdr_icmp(uint8_t *buf) {
   sr_icmp_hdr_t *icmp_hdr = (sr_icmp_hdr_t *)(buf);
