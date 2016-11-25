@@ -288,7 +288,7 @@ struct sr_nat_mapping *sr_nat_lookup_external(struct sr_nat *nat, uint16_t aux_e
 
 	while(pointer != NULL)
 	{
-		printf("NAT: inspecting aux-external %d (%d), type %s\n", pointer->aux_int, ntohs(pointer->aux_int), get_nat_type(pointer->type));
+		printf("NAT: inspecting aux-external %d (%d), type %s\n", pointer->aux_ext, ntohs(pointer->aux_ext), get_nat_type(pointer->type));
 		if(pointer->aux_ext == aux_ext && pointer->type == type)
 		{
 			pointer->last_updated = time(NULL);
