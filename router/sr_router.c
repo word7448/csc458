@@ -285,7 +285,7 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
         return;
     }
     
-    /* NAT CODE START */
+    /************************* NAT CODE START *************************/
     
     if (sr->nat_mode) {
         uint8_t ip_type = ip_protocol(packet + sizeof(sr_ethernet_hdr_t));
@@ -356,8 +356,16 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
                 struct sr_nat_mapping *mapping = sr_nat_lookup_internal(&(sr->the_nat), ip_header->ip_src, tcp_header->src_port, nat_mapping_tcp_old);
                 struct sr_if *external_interface = sr_get_interface(sr, "eth2");
                 if (!mapping) {
-                    mapping = sr_nat_insert_mapping(&(sr->the_nat), ip_header->ip_src, tcp_header->src_port, nat_mapping_tcp_new, NULL);
-                    mapping->ip_ext = external_interface->ip;
+                    
+                    struct sr_nat_mapping *mapping = sr_nat_lookup_internal(&(sr->the_nat), ip_header->ip_src, tcp_header->src_port, nat_mapping_tcp_new_s2);
+                    
+                    if (!mapping){
+                        mapping = sr_nat_insert_mapping(&(sr->the_nat), ip_header->ip_src, tcp_header->src_port, nat_mapping_tcp_new_s1, NULL);
+                        mapping->ip_ext = external_interface->ip;
+                    }
+                    else{
+                        mapping->type = nat_mapping_tcp_old;
+                    }
                 }
                 
                 if (longest_prefix_match(sr, ip_header->ip_dst)){
@@ -422,6 +430,11 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
                         
                         struct sr_nat_mapping *mapping = sr_nat_lookup_external(&(sr->the_nat), tcp_header->dst_port, nat_mapping_tcp_old);
                         if (mapping == NULL) {
+                            struct sr_nat_mapping *mapping = sr_nat_lookup_external(&(sr->the_nat), tcp_header->dst_port, nat_mapping_tcp_new_s1);
+                            if (mapping){
+                                mapping->type = nat_mapping_tcp_new_s2;
+                            }
+                            else{
                             printf("Mapping is NULL\n");
                             /*A: unsol syn may not need to do first part of check */
                             if (tcp_header->ack_num == tcp_header->seq_num + 1 && tcp_header->syn && tcp_header->ack){
@@ -439,6 +452,7 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
                                 
                                 
                                 
+                            }
                             }
                             
                         }
@@ -534,7 +548,7 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
         return; /*when in nat mode, stay in nat mode code*/
     }
     
-    /* NAT CODE END */
+    /************************** NAT CODE END **************************/
     
     /* Packet destined for this router */
     if (node != NULL) {
