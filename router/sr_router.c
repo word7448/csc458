@@ -351,19 +351,22 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
             
             else if(ip_type == ip_protocol_tcp){
                 /*get TCP Header*/
+                fprintf(stdout,"Got a TCP Packet on eth1\n");
                 sr_tcp_hdr_t *tcp_header = (sr_tcp_hdr_t *) (packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_tcp_hdr_t));
                 
                 struct sr_nat_mapping *mapping = sr_nat_lookup_internal(&(sr->the_nat), ip_header->ip_src, tcp_header->src_port, nat_mapping_tcp_old);
                 struct sr_if *external_interface = sr_get_interface(sr, "eth2");
                 if (!mapping) {
-                    
+                    fprintf(stdout,"no nat_mapping_tcp_old for TCP Packet check for nat_mapping_tcp_new_s2\n");
                     mapping = sr_nat_lookup_internal(&(sr->the_nat), ip_header->ip_src, tcp_header->src_port, nat_mapping_tcp_new_s2);
                     
                     if (!mapping){
+                        fprintf(stdout,"no nat_mapping_tcp_new_s2 for TCP Packet inserting  nat_mapping_tcp_new_s1\n");
                         mapping = sr_nat_insert_mapping(&(sr->the_nat), ip_header->ip_src, tcp_header->src_port, nat_mapping_tcp_new_s1, NULL);
                         mapping->ip_ext = external_interface->ip;
                     }
                     else{
+                        fprintf(stdout,"nat_mapping_tcp_new_s2 exists for TCP Packet changing to nat_mapping_tcp_old\n");
                         mapping->type = nat_mapping_tcp_old;
                     }
                 }
@@ -438,14 +441,16 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
                             printf("Mapping is NULL\n");
                             /*A: unsol syn may not need to do first part of check */
                             if (tcp_header->ack_num == tcp_header->seq_num + 1 && tcp_header->syn && tcp_header->ack){
+                                fprintf(stdout,"***** Got an Unsol syn in eth2 *****\n");
                                 /*get mapping HAX*/
                                 mapping = sr_nat_lookup_internal(&(sr->the_nat), ip_header->ip_src, tcp_header->src_port, nat_mapping_tcp_unsolicited);
                                 if (mapping){
-                                    /*NAT KNOWS OF UNSOL SYN*/
+                                    fprintf(stdout,"***** dup unsol syn *****\n");
                                     return;
                                 }
                                 else{
                                     /*NAT DOESNT KNOW OF UNSOL SYN, insert and drop*/
+                                    fprintf(stdout,"***** new unsol syn *****\n");
                                     sr_nat_insert_mapping(&(sr->the_nat), ip_header->ip_src, tcp_header->src_port, nat_mapping_tcp_unsolicited, packet);
                                     return;
                                 }
@@ -456,6 +461,7 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
                             }
                             
                         }
+                        fprintf(stdout,"got a TCP packet on eth2 with a mapping\n");
                         mapping->last_updated = time(NULL);
                         
                         ip_header->ip_dst = mapping->ip_int;
