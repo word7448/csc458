@@ -7,10 +7,11 @@
 #include <stdio.h>
 #include <string.h>
 
-int sr_nat_init(struct sr_nat *nat, int icmp_ko, int tcp_new_ko, int tcp_old_ko)
+int sr_nat_init(struct sr_instance *sr, int icmp_ko, int tcp_new_ko, int tcp_old_ko)
 { /* Initializes the nat */
 
-	assert(nat);
+	assert(sr);
+	struct sr_nat *nat = sr->the_nat;
 
 	/* Acquire mutex lock */
 	pthread_mutexattr_init(&(nat->attr));
@@ -23,7 +24,7 @@ int sr_nat_init(struct sr_nat *nat, int icmp_ko, int tcp_new_ko, int tcp_old_ko)
 	pthread_attr_setdetachstate(&(nat->thread_attr), PTHREAD_CREATE_JOINABLE);
 	pthread_attr_setscope(&(nat->thread_attr), PTHREAD_SCOPE_SYSTEM);
 	pthread_attr_setscope(&(nat->thread_attr), PTHREAD_SCOPE_SYSTEM);
-	pthread_create(&(nat->thread), &(nat->thread_attr), sr_nat_timeout, nat);
+	pthread_create(&(nat->thread), &(nat->thread_attr), sr_nat_timeout, sr);
 
 	/* CAREFUL MODIFYING CODE ABOVE THIS LINE! */
 
@@ -90,9 +91,10 @@ int sr_nat_destroy(struct sr_nat *nat)
 
 }
 
-void *sr_nat_timeout(void *nat_ptr)
+void *sr_nat_timeout(void *sr_ptr)
 { /* Periodic Timout handling */
-	struct sr_nat *nat = (struct sr_nat*) nat_ptr;
+	struct sr_instance *sr = (struct sr_instance*)sr_ptr;
+	struct sr_nat *nat = sr->the_nat;
 	while (1)
 	{
 		sleep(1.0);
@@ -202,6 +204,45 @@ void *sr_nat_timeout(void *nat_ptr)
 					current = previous->next;
 				}
 			}
+			else if ((current->type == nat_mapping_tcp_unsolicited) && (diff > 6))
+			{
+				printf("NAT: sending out unsolicited tcp response\n");
+				untouched = false;
+				if(head_mode)
+				{
+					nat->mappings = current->next;
+				}
+				else
+				{
+					previous->next = current->next;
+				}
+
+				/*send icmp t3 code3*/
+				/*assemble the bare minimum to use send_icmp*/
+				int size = sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t);
+				sr_ethernet_hdr_t *original = (sr_ethernet_hdr_t*)current->orig_ether_ip;
+				sr_ethernet_hdr_t *macs = (sr_ethernet_hdr_t*)malloc(sizeof(sr_ethernet_hdr_t));
+				bzero(macs, sizeof(sr_ethernet_hdr_t));
+				memcpy(macs->ether_shost, sr_get_interface(sr, "eth2")->mac, 6);
+				memcpy(macs->ether_dhost, original->ether_shost, 6);
+				send_icmp(sr, "eth2", macs, current->orig_ether_ip, size, ICMP_UNREACHABLE, 3, 0);
+
+				free(current->orig_ether_ip); /*the only time this field is used*/
+				free(current);
+				if (head_mode)
+				{
+					/*for the head of the list, the next thing you're going to inspect is... the head of the list again,
+					 * but this time it's a different head. set everything up for "head_mode again" just like before the while loop started*/
+					current = nat->mappings;
+					previous = NULL;
+				}
+				else
+				{
+					/*for the middle of the list the next thing you're inspecting is the deleted entry's next
+					 * because the deleted entry was spliced out, its next is right after the "previous"*/
+					current = previous->next;
+				}
+			}
 			/*only change both pointers if an entry was not removed.
 			 * if an entry was removed then when it goes, the removed entry's next
 			 * is the current. that means what is now "current" hasn't been inspected yet.
@@ -289,43 +330,68 @@ struct sr_nat_mapping *sr_nat_lookup_internal(struct sr_nat *nat, uint32_t ip_in
 /* Insert a new mapping into the nat's mapping table.
  Actually returns a copy to the new mapping, for thread safety.
  */
-struct sr_nat_mapping *sr_nat_insert_mapping(struct sr_nat *nat, uint32_t ip_int, uint16_t aux_int, sr_nat_mapping_type type)
+struct sr_nat_mapping *sr_nat_insert_mapping(struct sr_nat *nat, uint32_t ip_int, uint16_t aux_int, sr_nat_mapping_type type, uint8_t *original)
 {
 
 	pthread_mutex_lock(&(nat->lock));
 
-	int external = 0;
-	if (type == nat_mapping_tcp_new) /*you're never going to be inserting an established/old tcp mapping*/
-	{
-		external = rand() % USEABLE_EXTERNALS;
-		while (nat->port_taken[external])
-		{
-			external = rand() % USEABLE_EXTERNALS;
-		}
-		nat->port_taken[external] = true;
-		printf("NAT: Inserting tcp nat mapping for internal port %d (%d) on external port %d\n", aux_int, ntohs(aux_int), external);
-	}
-	else if (type == nat_mapping_icmp)
-	{
-		external = rand() % USEABLE_EXTERNALS;
-		while (nat->icmp_id_taken[external])
-		{
-			external = rand() % USEABLE_EXTERNALS;
-		}
-		nat->icmp_id_taken[external] = true;
-		printf("NAT: Inserting ICMP nat mapping for internal identifier %d (%d) on external identifier %d\n", aux_int, ntohs(aux_int), external);
-	}
-	external = external + 1024;
-
+	/*setup mapping struct*/
 	struct sr_nat_mapping *mapping = malloc(sizeof(struct sr_nat_mapping));
 	bzero(mapping, sizeof(struct sr_nat_mapping));
-	mapping->ip_int = ip_int;
-	mapping->aux_int = aux_int;
-	mapping->aux_ext = htons(external);
-	mapping->type = type;
-	mapping->last_updated = time(NULL);
-	mapping->next = nat->mappings; /*put the new one at the front of the list*/
-	nat->mappings = mapping;
+	int external = 0;
+
+	/*the normal case of making a mapping*/
+	if (type == nat_mapping_tcp_new || type == nat_mapping_icmp)
+	{
+		if (type == nat_mapping_tcp_new) /*you're never going to be inserting an established/old tcp mapping*/
+		{
+			external = rand() % USEABLE_EXTERNALS;
+			while (nat->port_taken[external])
+			{
+				external = rand() % USEABLE_EXTERNALS;
+			}
+			nat->port_taken[external] = true;
+			printf("NAT: Inserting new tcp nat mapping for internal port %d (%d) on external port %d\n", aux_int, ntohs(aux_int), external);
+		}
+		else if (type == nat_mapping_icmp)
+		{
+			external = rand() % USEABLE_EXTERNALS;
+			while (nat->icmp_id_taken[external])
+			{
+				external = rand() % USEABLE_EXTERNALS;
+			}
+			nat->icmp_id_taken[external] = true;
+			printf("NAT: Inserting ICMP nat mapping for internal identifier %d (%d) on external identifier %d\n", aux_int, ntohs(aux_int), external);
+		}
+		external = external + 1024;
+
+		mapping->ip_int = ip_int;
+		mapping->aux_int = aux_int;
+		mapping->aux_ext = htons(external);
+		mapping->type = type;
+		mapping->last_updated = time(NULL);
+		mapping->next = nat->mappings; /*put the new one at the front of the list*/
+		nat->mappings = mapping;
+	}
+	/*the hacky unusual case of making a nat entry to store the unsolicited syn information*/
+	else if (type == nat_mapping_tcp_unsolicited)
+	{
+		printf("NAT: Inserting tcp unsolicited hacky mapping for \"Internal\" %d (%d)\n", aux_int, ntohs(aux_int));
+		int partial_size = sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t);
+		mapping->type = nat_mapping_tcp_unsolicited;
+
+		/*
+		 * using internal ip and aux because an unsolicited syn is a tcp handshake stage 2.
+		 * it will have no external mapping because there was no stage 1 from lan --> which would've setup the mapping.
+		 * unsoliciteds need to be looked up by host and port to check for 1st, 2nd etc offense.
+		 * nat_internal_lookup takes ip and aux so use that to check for previous offenses.
+		 */
+		mapping->ip_int = ip_int; /*really the external address but to use internal lookup it's stored on ip_int*/
+		mapping->aux_int = aux_int;
+		mapping->orig_ether_ip = malloc(partial_size);
+		memcpy(mapping->orig_ether_ip, original, partial_size);
+	}
+
 
 	pthread_mutex_unlock(&(nat->lock));
 	return mapping;
@@ -336,7 +402,7 @@ const char* get_nat_type(sr_nat_mapping_type nat_type)
 	switch(nat_type)
 	{
 	case nat_mapping_icmp: return "nat_mapping_icmp";
-	case nat_mapping_tcp: return "nat_mapping_tcp";
+	case nat_mapping_tcp_unsolicited: return "nat_mapping_tcp_unsolicited";
 	case nat_mapping_tcp_old: return "nat_mapping_tcp_old";
 	case nat_mapping_tcp_new: return "nat_mapping_tcp_new";
 	default: return "bad sr_nat_mapping_type value";

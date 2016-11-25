@@ -11,8 +11,8 @@
 typedef enum
 {
 	nat_mapping_icmp,
-    nat_mapping_tcp,
 	nat_mapping_tcp_old,
+	nat_mapping_tcp_unsolicited,
 	nat_mapping_tcp_new
 /* nat_mapping_udp, */
 } sr_nat_mapping_type;
@@ -57,6 +57,7 @@ struct sr_nat_mapping
 	time_t last_updated; /* use to timeout mappings */
 	struct sr_nat_connection *conns; /* list of connections. null for ICMP */
 	struct sr_nat_mapping *next;
+	uint8_t *orig_ether_ip;
 };
 struct sr_tcp_syn {
     uint32_t ip_src;
@@ -86,7 +87,7 @@ struct sr_nat
 	pthread_t thread;
 };
 
-int sr_nat_init(struct sr_nat *nat, int icmp_ko, int tcp_new_ko, int tcp_old_ko);
+int sr_nat_init(struct sr_instance *sr, int icmp_ko, int tcp_new_ko, int tcp_old_ko);
 int sr_nat_destroy(struct sr_nat *nat); /* Destroys the nat (free memory) */
 void *sr_nat_timeout(void *sr_ptr); /* Periodic Timout */
 
@@ -100,7 +101,7 @@ struct sr_nat_mapping *sr_nat_lookup_internal(struct sr_nat *nat, uint32_t ip_in
 
 /* Insert a new mapping into the nat's mapping table.
  You must free the returned structure if it is not NULL. */
-struct sr_nat_mapping *sr_nat_insert_mapping(struct sr_nat *nat, uint32_t ip_int, uint16_t aux_int, sr_nat_mapping_type type);
+struct sr_nat_mapping *sr_nat_insert_mapping(struct sr_nat *nat, uint32_t ip_int, uint16_t aux_int, sr_nat_mapping_type type, uint8_t *original);
 void remove_nat_connections(struct sr_nat_connection *conn);
 const char* get_nat_type(sr_nat_mapping_type type);
 

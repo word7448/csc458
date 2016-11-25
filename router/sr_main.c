@@ -187,7 +187,7 @@ int main(int argc, char **argv)
 	if(sr.nat_mode)
 	{
 		printf("Initalize nat with ko icmp: %d, tcp_new: %d tcp_old %d\n", icmp_ko, tcp_new_ko, tcp_old_ko);
-		sr_nat_init(&(sr.the_nat), icmp_ko, tcp_new_ko, tcp_old_ko);
+		sr_nat_init(sr, icmp_ko, tcp_new_ko, tcp_old_ko);
 	}
 
     /* -- whizbang main loop ;-) */

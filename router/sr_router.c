@@ -356,8 +356,12 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
                 struct sr_nat_mapping *mapping = sr_nat_lookup_internal(&(sr->the_nat), ip_header->ip_src, tcp_header->src_port, nat_mapping_tcp_old);
                 struct sr_if *external_interface = sr_get_interface(sr, "eth2");
                 if (!mapping) {
-                    mapping = sr_nat_insert_mapping(&(sr->the_nat), ip_header->ip_src, tcp_header->src_port, nat_mapping_tcp_new);
-                    mapping->ip_ext = external_interface->ip;
+                	mapping = sr_nat_lookup_internal(&(sr->the_nat), ip_header->ip_src, tcp_header->src_port, nat_mapping_tcp_new);
+                	if(!mapping)
+                	{
+                		mapping = sr_nat_insert_mapping(&(sr->the_nat), ip_header->ip_src, tcp_header->src_port, nat_mapping_tcp_new);
+                		mapping->ip_ext = external_interface->ip;
+                	}
                 }
                 
                 /*LOCKED NAT*/
