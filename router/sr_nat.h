@@ -13,7 +13,9 @@ typedef enum
 	nat_mapping_icmp,
 	nat_mapping_tcp_old,
 	nat_mapping_tcp_unsolicited,
-	nat_mapping_tcp_new
+	nat_mapping_tcp_new_s1,
+	nat_mapping_tcp_new_s2,
+	nat_mapping_tcp_new_s3
 /* nat_mapping_udp, */
 } sr_nat_mapping_type;
 

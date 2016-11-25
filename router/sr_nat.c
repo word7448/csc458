@@ -177,9 +177,10 @@ void *sr_nat_timeout(void *sr_ptr)
 					current = previous->next;
 				}
 			}
-			else if ((current->type == nat_mapping_tcp_new) && (diff > nat->tcp_new_ko))
+			else if (((current->type == nat_mapping_tcp_new_s1 ) || (current->type == nat_mapping_tcp_new_s2 ) || (current->type == nat_mapping_tcp_new_s3))
+						&& (diff > nat->tcp_new_ko))
 			{
-				printf("NAT: Removing NEW tcp mapping of internal port %d (%d) to external port %d (%d)\n", current->aux_int, ntohs(current->aux_int), current->aux_ext, ntohs(current->aux_ext));
+				printf("NAT: Removing NEW tcp mapping (%s) of internal port %d (%d) to external port %d (%d)\n", get_nat_type(current->type), current->aux_int, ntohs(current->aux_int), current->aux_ext, ntohs(current->aux_ext));
 				untouched = false;
 				if (head_mode)
 				{/*for the head of the list, replace the actual head of the_nat->mappings*/
@@ -344,9 +345,9 @@ struct sr_nat_mapping *sr_nat_insert_mapping(struct sr_nat *nat, uint32_t ip_int
 	int external = 0;
 
 	/*the normal case of making a mapping*/
-	if (type == nat_mapping_tcp_new || type == nat_mapping_icmp)
+	if (type == nat_mapping_tcp_new_s1 || type == nat_mapping_icmp)
 	{
-		if (type == nat_mapping_tcp_new) /*you're never going to be inserting an established/old tcp mapping*/
+		if (type == nat_mapping_tcp_new_s1) /*you're never going to be inserting an established/old tcp mapping*/
 		{
 			external = rand() % USEABLE_EXTERNALS;
 			while (nat->port_taken[external])
@@ -407,7 +408,9 @@ const char* get_nat_type(sr_nat_mapping_type nat_type)
 	case nat_mapping_icmp: return "nat_mapping_icmp";
 	case nat_mapping_tcp_unsolicited: return "nat_mapping_tcp_unsolicited";
 	case nat_mapping_tcp_old: return "nat_mapping_tcp_old";
-	case nat_mapping_tcp_new: return "nat_mapping_tcp_new";
+	case nat_mapping_tcp_new_s1: return "nat_mapping_tcp_new_s1";
+	case nat_mapping_tcp_new_s2: return "nat_mapping_tcp_new_s2";
+	case nat_mapping_tcp_new_s3: return "nat_mapping_tcp_new_s3";
 	default: return "bad sr_nat_mapping_type value";
 	}
 }
