@@ -366,7 +366,7 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
                         mapping->type = nat_mapping_tcp_old;
                     }
                 }
-                
+                fprintf(stdout,"TCP packet has an old mapping\n");
                 if (longest_prefix_match(sr, ip_header->ip_dst)){
                     ip_header->ip_src = external_interface->ip;
                 }
@@ -379,7 +379,7 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
                 tcp_header->checksum = 0;
                 tcp_header->checksum = tcp_cksum(ip_header, tcp_header, len);
             }
-            
+            fprintf(stdout,"TCP packet ----- Starting send\n");
             /*in both cases, we alter the original packet so now its time to send it off*/
             struct sr_rt *match = longest_prefix_match(sr, ip_header->ip_dst);
             if (match){
@@ -418,7 +418,7 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
         else if (strncmp(interface, "eth2", 5) == 0) {
             fprintf(stdout,"External host reply/connection attempt\n");
             
-            print_hdrs(packet, len);
+            /*print_hdrs(packet, len);*/
             
             if (node){
                 
@@ -468,7 +468,7 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
                         ip_header->ip_sum = cksum(ip_header, sizeof(sr_ip_hdr_t));
                         tcp_header->checksum = 0;
                         tcp_header->checksum = tcp_cksum(ip_header, tcp_header, len);
-                        
+                        fprintf(stdout,"TCP packet ----- Starting send\n");
                         struct sr_rt *prefix_match = longest_prefix_match(sr, ip_header->ip_dst);
                         if (prefix_match){
                             printf("Found the match in routing table\n");
@@ -484,7 +484,7 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
                                 memcpy(reply_ethernet_header->ether_shost, router_if->mac, sizeof(uint8_t)*ETHER_ADDR_LEN);
                                 reply_ethernet_header->ether_type = ethernet_header->ether_type;
                                 
-                                print_hdrs(packet, len);
+                               /* print_hdrs(packet, len); */
                                 sr_send_packet(sr, packet, len, router_if->name);
                                 free(entry);
                                 
@@ -527,7 +527,7 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
                         /* make arp request here if no entry found */
                         if (entry) {
                             memcpy(ethernet_header->ether_dhost, entry->mac, 6);
-                            print_hdrs(packet, len);
+                            /*print_hdrs(packet, len);*/
                             sr_send_packet(sr, packet, len, "eth1");
                             return;
                         }
@@ -544,7 +544,7 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
             {
                 printf("Got a packet on the router wan probably for something inside\n");
             }
-            print_hdrs(packet, len);
+            /*print_hdrs(packet, len);*/
             
             return;
         }
