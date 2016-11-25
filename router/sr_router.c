@@ -330,7 +330,7 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
                 
                 /*if mapping doesn't exist insert it*/
                 if (!mapping){
-                    mapping = sr_nat_insert_mapping(&(sr->the_nat), ip_header->ip_src, icmp_header->identifier, nat_mapping_tcp_new);
+                    mapping = sr_nat_insert_mapping(&(sr->the_nat), ip_header->ip_src, icmp_header->identifier, nat_mapping_icmp);
                     mapping->ip_ext = external_interface->ip;
                 }
                 
