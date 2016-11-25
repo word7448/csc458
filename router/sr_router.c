@@ -432,6 +432,7 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
                             mapping = sr_nat_lookup_external(&(sr->the_nat), tcp_header->dst_port, nat_mapping_tcp_new_s1);
                             if (mapping){
                                 mapping->type = nat_mapping_tcp_new_s2;
+                                fprintf(stdout,"got a TCP packet on eth2 with a mapping for s1 changing to s2\n");
                             }
                             else{
                             printf("Mapping is NULL\n");
