@@ -357,7 +357,7 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
                 struct sr_if *external_interface = sr_get_interface(sr, "eth2");
                 if (!mapping) {
                     
-                    struct sr_nat_mapping *mapping = sr_nat_lookup_internal(&(sr->the_nat), ip_header->ip_src, tcp_header->src_port, nat_mapping_tcp_new_s2);
+                    mapping = sr_nat_lookup_internal(&(sr->the_nat), ip_header->ip_src, tcp_header->src_port, nat_mapping_tcp_new_s2);
                     
                     if (!mapping){
                         mapping = sr_nat_insert_mapping(&(sr->the_nat), ip_header->ip_src, tcp_header->src_port, nat_mapping_tcp_new_s1, NULL);
@@ -430,7 +430,7 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
                         
                         struct sr_nat_mapping *mapping = sr_nat_lookup_external(&(sr->the_nat), tcp_header->dst_port, nat_mapping_tcp_old);
                         if (mapping == NULL) {
-                            struct sr_nat_mapping *mapping = sr_nat_lookup_external(&(sr->the_nat), tcp_header->dst_port, nat_mapping_tcp_new_s1);
+                            mapping = sr_nat_lookup_external(&(sr->the_nat), tcp_header->dst_port, nat_mapping_tcp_new_s1);
                             if (mapping){
                                 mapping->type = nat_mapping_tcp_new_s2;
                             }
@@ -439,7 +439,7 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
                             /*A: unsol syn may not need to do first part of check */
                             if (tcp_header->ack_num == tcp_header->seq_num + 1 && tcp_header->syn && tcp_header->ack){
                                 /*get mapping HAX*/
-                                struct sr_nat_mapping *mapping = sr_nat_lookup_internal(&(sr->the_nat), ip_header->ip_src, tcp_header->src_port, nat_mapping_tcp_unsolicited);
+                                mapping = sr_nat_lookup_internal(&(sr->the_nat), ip_header->ip_src, tcp_header->src_port, nat_mapping_tcp_unsolicited);
                                 if (mapping){
                                     /*NAT KNOWS OF UNSOL SYN*/
                                     return;
