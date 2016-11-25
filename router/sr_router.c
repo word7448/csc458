@@ -330,7 +330,7 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
                 
                 /*if mapping doesn't exist insert it*/
                 if (!mapping){
-                    mapping = sr_nat_insert_mapping(&(sr->the_nat), ip_header->ip_src, icmp_header->identifier, nat_mapping_icmp);
+                    mapping = sr_nat_insert_mapping(&(sr->the_nat), ip_header->ip_src, icmp_header->identifier, nat_mapping_tcp_new);
                     mapping->ip_ext = external_interface->ip;
                 }
                 
@@ -353,10 +353,10 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
                 /*get TCP Header*/
                 sr_tcp_hdr_t *tcp_header = (sr_tcp_hdr_t *) (packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_tcp_hdr_t));
 
-                struct sr_nat_mapping *mapping = sr_nat_lookup_internal(&(sr->the_nat), ip_header->ip_src, tcp_header->src_port, nat_mapping_tcp);
+                struct sr_nat_mapping *mapping = sr_nat_lookup_internal(&(sr->the_nat), ip_header->ip_src, tcp_header->src_port, nat_mapping_tcp_old);
                 struct sr_if *external_interface = sr_get_interface(sr, "eth2");
                 if (!mapping) {
-                    mapping = sr_nat_insert_mapping(&(sr->the_nat), ip_header->ip_src, tcp_header->src_port, nat_mapping_tcp);
+                    mapping = sr_nat_insert_mapping(&(sr->the_nat), ip_header->ip_src, tcp_header->src_port, nat_mapping_tcp_new);
                     mapping->ip_ext = external_interface->ip;
                 }
                 
@@ -391,6 +391,7 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
                     if (tcp_header->fin && tcp_header->ack) {
                         currConn->isn_client = ntohl(tcp_header->seq_num);
                         currConn->state = tcp_state_closed;
+                        mapping->type = nat_mapping_tcp_old;
                     }
                 }
                 
@@ -483,7 +484,7 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
                     case ip_protocol_tcp: {
                         sr_tcp_hdr_t *tcp_header = (sr_tcp_hdr_t *) (packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_tcp_hdr_t));
                         
-                        struct sr_nat_mapping *mapping = sr_nat_lookup_external(&(sr->the_nat), ntohs(tcp_header->dst_port), nat_mapping_tcp);
+                        struct sr_nat_mapping *mapping = sr_nat_lookup_external(&(sr->the_nat), tcp_header->dst_port, nat_mapping_tcp_old);
                         if (mapping == NULL) {
                             printf("Mapping is NULL\n");
                             return;
@@ -520,6 +521,7 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
                             if (tcp_header->fin && tcp_header->ack) {
                                 currConn->isn_client = ntohl(tcp_header->seq_num);
                                 currConn->state = tcp_state_closed;
+                                
                             }
                         }
                         
