@@ -5,6 +5,7 @@
 #include <time.h>
 #include <pthread.h>
 #include <stdbool.h>
+#include "sr_router.h"
 
 #define USEABLE_EXTERNALS 64511
 
