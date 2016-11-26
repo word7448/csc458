@@ -232,7 +232,7 @@ void *sr_nat_timeout(void *sr_ptr)
 				memcpy(macs->ether_shost, original->ether_shost, 6);
 				macs->ether_type = ethertype_ip;
 				sr_ip_hdr_t *original_ip = (sr_ip_hdr_t*)(current->orig_ether_ip+sizeof(sr_ethernet_hdr_t));
-				send_icmp(sr, "eth2", (uint8_t*)macs, original_ip, size, ICMP_UNREACHABLE, 3, 0);
+				send_icmp(sr, "eth2", (uint8_t*)macs, original_ip, size, ICMP_UNREACHABLE, 3, false);
 
 				free(current->orig_ether_ip); /*the only time this field is used*/
 				free(current);
