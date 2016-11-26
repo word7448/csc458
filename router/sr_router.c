@@ -367,16 +367,17 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
                     }
                 }
                 fprintf(stdout,"TCP packet has an old mapping\n");
-
+                if (longest_prefix_match(sr, ip_header->ip_dst)){
+                    ip_header->ip_src = external_interface->ip;
+                }
                 
                 tcp_header->src_port = mapping->aux_ext;
-                ip_header->ip_src = external_interface->ip;
                 
                 
                 ip_header->ip_sum = 0;
                 ip_header->ip_sum = cksum(ip_header, sizeof(sr_ip_hdr_t));
                 tcp_header->checksum = 0;
-                tcp_header->checksum = tcp_cksum(ip_header, tcp_header, sizeof(sr_tcp_hdr_t));
+                tcp_header->checksum = tcp_cksum(ip_header, tcp_header, len);
             }
             fprintf(stdout,"TCP packet ----- Starting send\n");
             /*in both cases, we alter the original packet so now its time to send it off*/
@@ -466,7 +467,7 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
                         ip_header->ip_sum = 0;
                         ip_header->ip_sum = cksum(ip_header, sizeof(sr_ip_hdr_t));
                         tcp_header->checksum = 0;
-                        tcp_header->checksum = tcp_cksum(ip_header, tcp_header, sizeof(sr_tcp_hdr_t));
+                        tcp_header->checksum = tcp_cksum(ip_header, tcp_header, len);
                         fprintf(stdout,"TCP packet ----- Starting send\n");
                         struct sr_rt *prefix_match = longest_prefix_match(sr, ip_header->ip_dst);
                         if (prefix_match){
