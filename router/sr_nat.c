@@ -398,6 +398,7 @@ struct sr_nat_mapping *sr_nat_insert_mapping(struct sr_nat *nat, uint32_t ip_int
 		mapping->aux_int = aux_int;
 		mapping->orig_ether_ip = malloc(partial_size);
 		memcpy(mapping->orig_ether_ip, original, partial_size);
+		mapping->next = nat->mappings;
 		nat->mappings = mapping;
 	}
 
