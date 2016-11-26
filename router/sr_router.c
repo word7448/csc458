@@ -460,7 +460,9 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
                                 
                             }
                             }
-                            return;
+                            if (mapping == NULL){
+                                return;
+                            }
                         }
                         fprintf(stdout,"got a TCP packet on eth2 with a mapping\n");
                         mapping->last_updated = time(NULL);
