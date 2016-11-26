@@ -209,7 +209,7 @@ void *sr_nat_timeout(void *sr_ptr)
 			}
 			else if ((current->type == nat_mapping_tcp_unsolicited) && (diff > 6))
 			{
-				printf("NAT: sending out unsolicited tcp response\n");
+				printf("NAT: sending out unsolicited icmp response\n");
 				untouched = false;
 				if(head_mode)
 				{
@@ -226,8 +226,11 @@ void *sr_nat_timeout(void *sr_ptr)
 				sr_ethernet_hdr_t *original = (sr_ethernet_hdr_t*)current->orig_ether_ip;
 				sr_ethernet_hdr_t *macs = (sr_ethernet_hdr_t*)malloc(sizeof(sr_ethernet_hdr_t));
 				bzero(macs, sizeof(sr_ethernet_hdr_t));
-				memcpy(macs->ether_shost, sr_get_interface(sr, "eth2")->mac, 6);
-				memcpy(macs->ether_dhost, original->ether_shost, 6);
+
+				/*assemble dest/src backwards because send_icmp will flip it forwards*/
+				memcpy(macs->ether_dhost, sr_get_interface(sr, "eth2")->mac, 6);
+				memcpy(macs->ether_shost, original->ether_shost, 6);
+				macs->ether_type = ethertype_ip;
 				sr_ip_hdr_t *original_ip = (sr_ip_hdr_t*)(current->orig_ether_ip+sizeof(sr_ethernet_hdr_t));
 				send_icmp(sr, "eth2", (uint8_t*)macs, original_ip, size, ICMP_UNREACHABLE, 3, 0);
 
@@ -342,6 +345,8 @@ struct sr_nat_mapping *sr_nat_insert_mapping(struct sr_nat *nat, uint32_t ip_int
 	/*setup mapping struct*/
 	struct sr_nat_mapping *mapping = malloc(sizeof(struct sr_nat_mapping));
 	bzero(mapping, sizeof(struct sr_nat_mapping));
+	mapping->last_updated = time(NULL);
+
 	int external = 0;
 
 	/*the normal case of making a mapping*/
@@ -373,7 +378,6 @@ struct sr_nat_mapping *sr_nat_insert_mapping(struct sr_nat *nat, uint32_t ip_int
 		mapping->aux_int = aux_int;
 		mapping->aux_ext = htons(external);
 		mapping->type = type;
-		mapping->last_updated = time(NULL);
 		mapping->next = nat->mappings; /*put the new one at the front of the list*/
 		nat->mappings = mapping;
 	}
@@ -394,6 +398,8 @@ struct sr_nat_mapping *sr_nat_insert_mapping(struct sr_nat *nat, uint32_t ip_int
 		mapping->aux_int = aux_int;
 		mapping->orig_ether_ip = malloc(partial_size);
 		memcpy(mapping->orig_ether_ip, original, partial_size);
+		mapping->next = nat->mappings;
+		nat->mappings = mapping;
 	}
 
 

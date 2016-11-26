@@ -49,5 +49,5 @@ void print_hdrs(uint8_t *buf, uint32_t length);
 unsigned char* whats_my_mac(struct sr_instance *sr, char *interface);
 uint32_t whats_my_ip(struct sr_instance *sr, char *interface);
 char* ever_pointer(struct sr_instance *sr, char *interface);
-
+void print_addrs(uint8_t *buf, uint32_t length);
 #endif /* -- SR_UTILS_H -- */

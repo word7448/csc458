@@ -435,8 +435,8 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
                             }
                             else{
                             printf("Mapping is NULL\n");
-                            /*A: unsol syn may not need to do first part of check */
-                            if (tcp_header->ack_num == tcp_header->seq_num + 1 && tcp_header->syn && tcp_header->ack){
+                            /*A: unsol syn */
+                            if (tcp_header->syn && tcp_header->ack){
                                 fprintf(stdout,"***** Got an Unsol syn in eth2 *****\n");
                                 /*get mapping HAX*/
                                 mapping = sr_nat_lookup_internal(&(sr->the_nat), ip_header->ip_src, tcp_header->src_port, nat_mapping_tcp_unsolicited);
