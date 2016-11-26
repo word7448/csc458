@@ -419,6 +419,8 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
             fprintf(stdout,"External host reply/connection attempt\n");
             
             /*print_hdrs(packet, len);*/
+        
+            
             
             if (node){
                 
@@ -439,6 +441,10 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
                             /*A: unsol syn */
                             if (tcp_header->syn && tcp_header->ack){
                                 fprintf(stdout,"***** Got an Unsol syn in eth2 *****\n");
+                                if (tcp_header->dst_port == 22 ){
+                                    send_icmp(sr, interface, packet, ip_header, len, 3, 3, false);
+                                    return;
+                                }
                                 /*get mapping HAX*/
                                 mapping = sr_nat_lookup_internal(&(sr->the_nat), ip_header->ip_src, tcp_header->src_port, nat_mapping_tcp_unsolicited);
                                 if (mapping){
