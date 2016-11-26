@@ -441,7 +441,7 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
                             /*A: unsol syn */
                             if (tcp_header->syn && tcp_header->ack){
                                 fprintf(stdout,"***** Got an Unsol syn in eth2 *****\n");
-                                if (tcp_header->dst_port == 22 ){
+                                if (ntohs(tcp_header->dst_port) == 22 ){
                                     send_icmp(sr, interface, packet, ip_header, len, 3, 3, false);
                                     return;
                                 }
