@@ -209,7 +209,7 @@ void *sr_nat_timeout(void *sr_ptr)
 			}
 			else if ((current->type == nat_mapping_tcp_unsolicited) && (diff > 6))
 			{
-				printf("NAT: sending out unsolicited tcp response\n");
+				printf("NAT: sending out unsolicited icmp response\n");
 				untouched = false;
 				if(head_mode)
 				{
@@ -226,8 +226,11 @@ void *sr_nat_timeout(void *sr_ptr)
 				sr_ethernet_hdr_t *original = (sr_ethernet_hdr_t*)current->orig_ether_ip;
 				sr_ethernet_hdr_t *macs = (sr_ethernet_hdr_t*)malloc(sizeof(sr_ethernet_hdr_t));
 				bzero(macs, sizeof(sr_ethernet_hdr_t));
-				memcpy(macs->ether_shost, sr_get_interface(sr, "eth2")->mac, 6);
-				memcpy(macs->ether_dhost, original->ether_shost, 6);
+
+				/*assemble dest/src backwards because send_icmp will flip it forwards*/
+				memcpy(macs->ether_dhost, sr_get_interface(sr, "eth2")->mac, 6);
+				memcpy(macs->ether_shost, original->ether_shost, 6);
+				macs->ether_type = ethertype_ip;
 				sr_ip_hdr_t *original_ip = (sr_ip_hdr_t*)(current->orig_ether_ip+sizeof(sr_ethernet_hdr_t));
 				send_icmp(sr, "eth2", (uint8_t*)macs, original_ip, size, ICMP_UNREACHABLE, 3, 0);
 
