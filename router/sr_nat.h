@@ -15,7 +15,7 @@ typedef enum
 	nat_mapping_tcp_unsolicited,
 	nat_mapping_tcp_new_s1,
 	nat_mapping_tcp_new_s2,
-	nat_mapping_tcp_new_s3
+	nat_mapping_tcp_new_s3 /*never used. after stage 2 it goes to old*/
 /* nat_mapping_udp, */
 } sr_nat_mapping_type;
 
