@@ -439,7 +439,7 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
                             else{
                             printf("Mapping is NULL\n");
                             /*A: unsol syn */
-                            if (tcp_header->syn && tcp_header->ack){
+                            if (tcp_header->syn){
                                 fprintf(stdout,"***** Got an Unsol syn in eth2 *****\n");
                                 if (ntohs(tcp_header->dst_port) == 22 ){
                                     send_icmp(sr, interface, packet, ip_header, len, 3, 3, false);
