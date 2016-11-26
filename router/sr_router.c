@@ -303,7 +303,7 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
                 }
                 else if(ip_type == ip_protocol_tcp){
                     fprintf(stdout,"GOT A TCP\n");
-                    send_icmp(sr, interface, packet, ip_header, len, 0, 3, false);
+                    send_icmp(sr, interface, packet, ip_header, len, 3, 3, false);
                     return;
                 }
                 else{
@@ -452,8 +452,6 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
                                     return;
                                 }
                                 
-                                
-                                
                             }
                             }
                             
@@ -542,7 +540,7 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
             }
             else
             {
-                printf("Got a packet on the router wan probably for something inside\n");
+                
             }
             /*print_hdrs(packet, len);*/
             
