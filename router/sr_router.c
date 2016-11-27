@@ -27,7 +27,7 @@
 /*Global*/
 int sanity_check(sr_ip_hdr_t *ipheader);
 struct sr_rt *longest_prefix_match(struct sr_instance *sr, uint32_t ipdest);
-struct sr_nat_connection *sr_nat_insert_tcp_con(struct sr_nat_mapping *mapping, uint32_t ip_con);
+
 
 /*---------------------------------------------------------------------
  * Method: sr_init(void)
@@ -374,9 +374,9 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
                 tcp_header->src_port = mapping->aux_ext;
                 
                 
-                ip_header->ip_sum = 0;
+               
                 ip_header->ip_sum = cksum(ip_header, sizeof(sr_ip_hdr_t));
-                tcp_header->checksum = 0;
+                
                 tcp_header->checksum = tcp_cksum(ip_header, tcp_header, len);
             }
             fprintf(stdout,"TCP packet ----- Starting send\n");
@@ -470,10 +470,10 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
                         ip_header->ip_dst = mapping->ip_int;
                         tcp_header->dst_port = mapping->aux_int;
                         
-                        ip_header->ip_sum = 0;
+                        
                         ip_header->ip_sum = cksum(ip_header, sizeof(sr_ip_hdr_t));
-                        tcp_header->checksum = 0;
                         tcp_header->checksum = tcp_cksum(ip_header, tcp_header, len);
+                        
                         fprintf(stdout,"TCP packet ----- Starting send\n");
                         struct sr_rt *prefix_match = longest_prefix_match(sr, ip_header->ip_dst);
                         if (prefix_match){
@@ -993,21 +993,4 @@ void handle_qreq(struct sr_instance *sr, struct sr_arpreq *request)
     {
         /*printf("difference is less than 1 (%ld). it's too soon to try again\n", diff);*/
     }
-}
-
-struct sr_nat_connection *sr_nat_insert_tcp_con(struct sr_nat_mapping *mapping, uint32_t ip_con) {
-    struct sr_nat_connection *newConn = (struct sr_nat_connection *)malloc(sizeof(struct sr_nat_connection));
-    assert(newConn != NULL);
-    memset(newConn, 0, sizeof(struct sr_nat_connection));
-    
-    newConn->last_update = time(NULL);
-    newConn->ip = ip_con;
-    newConn->state = tcp_state_closed;
-    
-    struct sr_nat_connection *currConn = mapping->conns;
-    
-    mapping->conns = newConn;
-    newConn->next = currConn;
-    
-    return newConn;
 }
