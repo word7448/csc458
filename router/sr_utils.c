@@ -56,7 +56,7 @@ uint32_t tcp_cksum(sr_ip_hdr_t *ipHdr, sr_tcp_hdr_t *tcpHeader, int total_len) {
     free(tcp_psuedo_header);
     free(complete_tcp);
     
-    return currCksum;
+    return calcCksum;
 }
 
 
