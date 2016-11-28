@@ -374,7 +374,7 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
                 tcp_header->src_port = mapping->aux_ext;
                 
                 
-               
+                ip_header->ip_sum = 0;
                 ip_header->ip_sum = cksum(ip_header, sizeof(sr_ip_hdr_t));
                 
                 tcp_header->checksum = tcp_cksum(ip_header, tcp_header, len);
@@ -470,7 +470,7 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
                         ip_header->ip_dst = mapping->ip_int;
                         tcp_header->dst_port = mapping->aux_int;
                         
-                        
+                        ip_header->ip_sum = 0;
                         ip_header->ip_sum = cksum(ip_header, sizeof(sr_ip_hdr_t));
                         tcp_header->checksum = tcp_cksum(ip_header, tcp_header, len);
                         
