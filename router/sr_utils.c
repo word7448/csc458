@@ -50,6 +50,9 @@ uint32_t tcp_cksum(sr_ip_hdr_t *ipHdr, sr_tcp_hdr_t *tcpHeader, int total_len) {
     
     uint16_t calcCksum = cksum(complete_tcp, full_tcp_len);
     
+    printf("Original TCP CS: %d\n", currCksum);
+    printf("Computed TCP CS: %d\n", calcCksum);
+    
     free(tcp_psuedo_header);
     free(complete_tcp);
     
