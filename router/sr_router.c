@@ -27,8 +27,6 @@
 /*Global*/
 int sanity_check(sr_ip_hdr_t *ipheader);
 struct sr_rt *longest_prefix_match(struct sr_instance *sr, uint32_t ipdest);
-struct sr_nat_connection *sr_nat_insert_tcp_con(struct sr_nat_mapping *mapping, uint32_t ip_con);
-struct sr_nat_connection *sr_nat_lookup_tcp_con(struct sr_nat_mapping *mapping, uint32_t ip_con);
 
 
 /*---------------------------------------------------------------------
@@ -369,7 +367,7 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
                     }
                 }
                 
-                /* Critical section, make sure you lock, careful modifying code under critical section. */
+                /* Critical section, make sure you lock, careful modifying code under critical section.
                 pthread_mutex_lock(&((sr->the_nat).lock));
                 if (mapping->conns){
                     printf("MAPPING CONNS %d\n", mapping->conns->ip);}
@@ -431,7 +429,7 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
                 }
                 
                 pthread_mutex_unlock(&((sr->the_nat).lock));
-                /* End of critical section. */
+                 End of critical section. */
                 
                 
                 
@@ -540,7 +538,7 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
                         
                         
                         
-                        /* Critical section, make sure you lock, careful modifying code under critical section. */
+                        /* Critical section, make sure you lock, careful modifying code under critical section.
                         pthread_mutex_lock(&((sr->the_nat).lock));
                         struct sr_nat_connection *tcp_con = sr_nat_lookup_tcp_con(mapping, ip_header->ip_src);
                         
@@ -555,7 +553,7 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
                                     tcp_con->isn_server = ntohl(tcp_header->seq_num);
                                     tcp_con->state = tcp_state_syn_received;
                                     
-                                    /* Simultaneous open */
+                                    
                                 } else if (ntohl(tcp_header->ack_num) == 0 && tcp_header->syn && !tcp_header->ack) {
                                     tcp_con->isn_server = ntohl(tcp_header->seq_num);
                                     tcp_con->state = tcp_state_syn_received;
@@ -591,7 +589,7 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
                         }
                         
                         pthread_mutex_unlock(&((sr->the_nat).lock));
-                        /* End of critical section. */
+                         End of critical section. */
                         
                         
                         
@@ -1129,52 +1127,5 @@ void handle_qreq(struct sr_instance *sr, struct sr_arpreq *request)
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-struct sr_nat_connection *sr_nat_insert_tcp_con(struct sr_nat_mapping *mapping, uint32_t ip_con) {
-    struct sr_nat_connection *newConn = (struct sr_nat_connection *)malloc(sizeof(struct sr_nat_connection));
-    assert(newConn != NULL);
-    memset(newConn, 0, sizeof(struct sr_nat_connection));
-    
-    newConn->last_update = time(NULL);
-    newConn->ip = ip_con;
-    newConn->state = tcp_state_closed;
-    
-    struct sr_nat_connection *currConn = mapping->conns;
-    
-    mapping->conns = newConn;
-    newConn->next = currConn;
-    
-    return newConn;
-}
-
-struct sr_nat_connection *sr_nat_lookup_tcp_con(struct sr_nat_mapping *mapping, uint32_t ip_con) {
-    assert(mapping);
-    assert(ip_con);
-    struct sr_nat_connection *currConn = mapping->conns;
-    
-    while (currConn != NULL) {
-        if (currConn->ip == ip_con) {
-            return currConn;
-        }
-        currConn = currConn->next;
-    }
-    
-    return NULL;
-}
 
 
