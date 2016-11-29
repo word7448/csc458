@@ -34,6 +34,7 @@ int sr_nat_init(void *sr_ptr, int icmp_ko, int tcp_new_ko, int tcp_old_ko)
 	nat->icmp_ko = icmp_ko;
 	nat->tcp_new_ko = tcp_new_ko;
 	nat->tcp_old_ko = tcp_old_ko;
+	nat->incoming = NULL;
 
 	/*nothing is taken at the begining*/
 	int i;
@@ -352,7 +353,6 @@ struct sr_nat_mapping *sr_nat_insert_mapping(struct sr_nat *nat, uint32_t ip_int
 
 	/*copy of nat internal lookup to reincarnate an old mapping*/
 	/*copy start*/
-	printf("NAT: got an internal nat request; looking for type %s for internal port/identifier %d (%d) for ip:\n", get_nat_type(type), aux_int, ntohs(aux_int));
 	print_addr_ip_int(ip_int);
 
 	/* handle lookup here, malloc and assign to copy. */
@@ -360,10 +360,10 @@ struct sr_nat_mapping *sr_nat_insert_mapping(struct sr_nat *nat, uint32_t ip_int
 
 	while(pointer != NULL)
 	{
-		printf("NAT: inspecting aux-internal %d (%d), type %s, ip:\n", pointer->aux_int, ntohs(pointer->aux_int), get_nat_type(pointer->type));
 		print_addr_ip_int(pointer->ip_int);
 		if(pointer->ip_int == ip_int && pointer->type == type)
 		{
+			printf("NAT: reincarnation ok\n");
 			pointer->last_updated = time(NULL);
 			pointer->aux_int = aux_int;
 			mapping = pointer;
@@ -374,6 +374,7 @@ struct sr_nat_mapping *sr_nat_insert_mapping(struct sr_nat *nat, uint32_t ip_int
 	}
 	/*copy end*/
 
+	printf("NAT: reincarnation failed\n");
 	if (pointer == NULL)
 	{
 		/*the normal case of making a mapping*/
@@ -445,5 +446,23 @@ const char* get_nat_type(sr_nat_mapping_type nat_type)
 	case nat_mapping_tcp_new_s2: return "nat_mapping_tcp_new_s2";
 	case nat_mapping_tcp_new_s3: return "nat_mapping_tcp_new_s3";
 	default: return "bad sr_nat_mapping_type value";
+	}
+}
+
+void dump_nat_mappings(struct sr_instance *sr)
+{
+	printf("Dumping nat entries\n");
+	struct sr_nat_mapping *entry = sr->the_nat.mappings;
+	while(entry != NULL)
+	{
+		printf("NAT: Entry:\n");
+		printf("\tType: %s\n", get_nat_type(entry->type));
+		printf("External ip\n");
+		print_addr_ip_int(entry->ip_ext);
+		printf("\tExternal aux: %d (%d)\n", entry->aux_ext, ntohs(entry->aux_ext));
+		print_addr_ip_int(entry->ip_int);
+		printf("\tInternal aux: %d (%d)\n", entry->aux_int, ntohs(entry->aux_int));
+
+		entry = entry->next;
 	}
 }

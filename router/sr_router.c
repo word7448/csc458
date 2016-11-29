@@ -464,6 +464,7 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
                     reply_ethernet_header->ether_type = ethernet_header->ether_type;
                     
                     printf("Sending lan --> wan out interface: %s\n", sr_interface_instance->name);
+                    dump_nat_mappings(sr);
                     sr_send_packet(sr, packet, len, sr_interface_instance->name);
                     free(entry);
                     
