@@ -322,7 +322,7 @@ struct sr_nat_mapping *sr_nat_lookup_internal(struct sr_nat *nat, uint32_t ip_in
 	{
 		printf("NAT: inspecting aux-internal %d (%d), type %s, ip:\n", pointer->aux_int, ntohs(pointer->aux_int), get_nat_type(pointer->type));
 		print_addr_ip_int(pointer->ip_int);
-		if(pointer->ip_int == ip_int && pointer->aux_int == aux_int && pointer->type == type)
+		if(pointer->ip_int == ip_int)
 		{
 			pointer->last_updated = time(NULL);
 			break;
@@ -340,6 +340,7 @@ struct sr_nat_mapping *sr_nat_lookup_internal(struct sr_nat *nat, uint32_t ip_in
 struct sr_nat_mapping *sr_nat_insert_mapping(struct sr_nat *nat, uint32_t ip_int, uint16_t aux_int, sr_nat_mapping_type type, uint8_t *original)
 {
 
+	printf("!!!!!NAT INSERTION!!!!!\n");
 	pthread_mutex_lock(&(nat->lock));
 
 	/*setup mapping struct*/
