@@ -27,6 +27,8 @@
 /*Global*/
 int sanity_check(sr_ip_hdr_t *ipheader);
 struct sr_rt *longest_prefix_match(struct sr_instance *sr, uint32_t ipdest);
+struct sr_nat_connection *sr_nat_insert_tcp_con(struct sr_nat_mapping *mapping, uint32_t ip_con);
+struct sr_nat_connection *sr_nat_lookup_tcp_con(struct sr_nat_mapping *mapping, uint32_t ip_con);
 
 
 /*---------------------------------------------------------------------
@@ -366,6 +368,73 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
                         mapping->type = nat_mapping_tcp_old;
                     }
                 }
+                
+                /* Critical section, make sure you lock, careful modifying code under critical section. */
+                pthread_mutex_lock(&((sr->the_nat).lock));
+                if (mapping->conns){
+                    printf("MAPPING CONNS %d\n", mapping->conns->ip);}
+                struct sr_nat_connection *tcp_con = sr_nat_lookup_tcp_con(mapping, ip_header->ip_dst);
+                
+                if (tcp_con == NULL) {
+                    tcp_con = sr_nat_insert_tcp_con(mapping, ip_header->ip_dst);
+                }
+                tcp_con->last_update = time(NULL);
+                
+                switch (tcp_con->state) {
+                    case tcp_state_closed:
+                        if (ntohl(tcp_header->ack_num) == 0 && tcp_header->syn && !tcp_header->ack) {
+                            tcp_con->isn_client = ntohl(tcp_header->seq_num);
+                            tcp_con->state = tcp_state_syn_sent;
+                        }
+                        break;
+                        
+                    case tcp_state_syn_received:
+                        if (ntohl(tcp_header->seq_num) == tcp_con->isn_client + 1 && ntohl(tcp_header->ack_num) == tcp_con->isn_server + 1 && !tcp_header->syn) {
+                            tcp_con->isn_client = ntohl(tcp_header->seq_num);
+                            tcp_con->state = tcp_state_established;
+                        }
+                        
+                        pthread_mutex_lock(&(sr->the_nat.lock));
+                        struct sr_tcp_syn *incoming = sr->the_nat.incoming;
+                        while (incoming){
+                            if ((incoming->ip_src == ip_header->ip_src) && (incoming->src_port == tcp_header->src_port)){
+                                break;
+                            }
+                            incoming = incoming->next;
+                        }
+                        
+                        if (!incoming){
+                            struct sr_tcp_syn *new = (struct sr_tcp_syn *) malloc(sizeof(struct sr_tcp_syn));
+                            new->ip_src = ip_header->ip_src;
+                            new->src_port = tcp_header->src_port;
+                            new->last_received = time(NULL);
+                            new->len = len;
+                            new->packet = (uint8_t *) malloc(len);
+                            memcpy(new->packet, packet, len);
+                            new->next = sr->the_nat.incoming;
+                            sr->the_nat.incoming = new;
+                        }
+                        pthread_mutex_unlock(&(sr->the_nat.lock));
+                        break;
+                        
+                        break;
+                        
+                    case tcp_state_established:
+                        if (tcp_header->fin && tcp_header->ack) {
+                            tcp_con->isn_client = ntohl(tcp_header->seq_num);
+                            tcp_con->state = tcp_state_closed;
+                        }
+                        break;
+                        
+                    default:
+                        break;
+                }
+                
+                pthread_mutex_unlock(&((sr->the_nat).lock));
+                /* End of critical section. */
+                
+                
+                
                 fprintf(stdout,"TCP packet has an old mapping\n");
                 if (longest_prefix_match(sr, ip_header->ip_dst)){
                     ip_header->ip_src = external_interface->ip;
@@ -466,6 +535,68 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
                         }
                         fprintf(stdout,"got a TCP packet on eth2 with a mapping\n");
                         mapping->last_updated = time(NULL);
+                        
+                        
+                        
+                        
+                        
+                        /* Critical section, make sure you lock, careful modifying code under critical section. */
+                        pthread_mutex_lock(&((sr->the_nat).lock));
+                        struct sr_nat_connection *tcp_con = sr_nat_lookup_tcp_con(mapping, ip_header->ip_src);
+                        
+                        if (tcp_con == NULL) {
+                            tcp_con = sr_nat_insert_tcp_con(mapping, ip_header->ip_src);
+                        }
+                        tcp_con->last_update = time(NULL);
+                        
+                        switch (tcp_con->state) {
+                            case tcp_state_syn_sent:
+                                if (ntohl(tcp_header->ack_num) == tcp_con->isn_client + 1 && tcp_header->syn && tcp_header->ack) {
+                                    tcp_con->isn_server = ntohl(tcp_header->seq_num);
+                                    tcp_con->state = tcp_state_syn_received;
+                                    
+                                    /* Simultaneous open */
+                                } else if (ntohl(tcp_header->ack_num) == 0 && tcp_header->syn && !tcp_header->ack) {
+                                    tcp_con->isn_server = ntohl(tcp_header->seq_num);
+                                    tcp_con->state = tcp_state_syn_received;
+                                }
+                                break;
+                                
+                            case tcp_state_syn_received:
+                                pthread_mutex_lock(&(sr->the_nat.lock));
+                                struct sr_tcp_syn *incoming = sr->the_nat.incoming;
+                                while (incoming){
+                                    if ((incoming->ip_src == ip_header->ip_src) && (incoming->src_port == tcp_header->src_port)){
+                                        break;
+                                    }
+                                    incoming = incoming->next;
+                                }
+                                
+                                if (!incoming){
+                                    struct sr_tcp_syn *new = (struct sr_tcp_syn *) malloc(sizeof(struct sr_tcp_syn));
+                                    new->ip_src = ip_header->ip_src;
+                                    new->src_port = tcp_header->src_port;
+                                    new->last_received = time(NULL);
+                                    new->len = len;
+                                    new->packet = (uint8_t *) malloc(len);
+                                    memcpy(new->packet, packet, len);
+                                    new->next = sr->the_nat.incoming;
+                                    sr->the_nat.incoming = new;
+                                }
+                                pthread_mutex_unlock(&(sr->the_nat.lock));
+                                break;
+                                
+                            default:
+                                break;
+                        }
+                        
+                        pthread_mutex_unlock(&((sr->the_nat).lock));
+                        /* End of critical section. */
+                        
+                        
+                        
+                        
+                        
                         
                         ip_header->ip_dst = mapping->ip_int;
                         tcp_header->dst_port = mapping->aux_int;
@@ -994,3 +1125,56 @@ void handle_qreq(struct sr_instance *sr, struct sr_arpreq *request)
         /*printf("difference is less than 1 (%ld). it's too soon to try again\n", diff);*/
     }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+struct sr_nat_connection *sr_nat_insert_tcp_con(struct sr_nat_mapping *mapping, uint32_t ip_con) {
+    struct sr_nat_connection *newConn = (struct sr_nat_connection *)malloc(sizeof(struct sr_nat_connection));
+    assert(newConn != NULL);
+    memset(newConn, 0, sizeof(struct sr_nat_connection));
+    
+    newConn->last_update = time(NULL);
+    newConn->ip = ip_con;
+    newConn->state = tcp_state_closed;
+    
+    struct sr_nat_connection *currConn = mapping->conns;
+    
+    mapping->conns = newConn;
+    newConn->next = currConn;
+    
+    return newConn;
+}
+
+struct sr_nat_connection *sr_nat_lookup_tcp_con(struct sr_nat_mapping *mapping, uint32_t ip_con) {
+    assert(mapping);
+    assert(ip_con);
+    struct sr_nat_connection *currConn = mapping->conns;
+    
+    while (currConn != NULL) {
+        if (currConn->ip == ip_con) {
+            return currConn;
+        }
+        currConn = currConn->next;
+    }
+    
+    return NULL;
+}
+
+
