@@ -225,8 +225,6 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
     assert(sr);
     assert(packet);
     assert(interface);
-    
-    /*voodoo vars... magic bits*/
     bool vd = false;
     uint8_t *memc = malloc(len);
     memcpy(memc, packet, len);
