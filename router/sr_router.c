@@ -226,6 +226,11 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
     assert(packet);
     assert(interface);
     
+    /*forgery variables*/
+    bool forge = false;
+    uint8_t *copy = malloc(len);
+    memcpy(copy, packet, len);
+
     /* Get ethernet header */
     sr_ethernet_hdr_t *ethernet_header = (sr_ethernet_hdr_t *) packet;
     
@@ -360,6 +365,9 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
                         fprintf(stdout,"no nat_mapping_tcp_new_s2 for TCP Packet inserting  nat_mapping_tcp_new_s1\n");
                         mapping = sr_nat_insert_mapping(&(sr->the_nat), ip_header->ip_src, tcp_header->src_port, nat_mapping_tcp_new_s1, NULL);
                         mapping->ip_ext = external_interface->ip;
+
+                        printf("forging syn-ack\n");
+                        forge = true;
                     }
                     else{
                         fprintf(stdout,"nat_mapping_tcp_new_s2 exists for TCP Packet changing to nat_mapping_tcp_old\n");
@@ -398,14 +406,71 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
                     reply_ethernet_header->ether_type = ethernet_header->ether_type;
                     
                     printf("Sending lan --> wan out interface: %s\n", sr_interface_instance->name);
-                    dump_nat_mappings(sr);
                     sr_send_packet(sr, packet, len, sr_interface_instance->name);
+					if (forge)
+					{
+						printf("start forging process of syn-ack\n");
+						sr_ethernet_hdr_t *f_eth = (sr_ethernet_hdr_t*) copy;
+						sr_ip_hdr_t *f_ip = (sr_ip_hdr_t*) (copy + sizeof(sr_ethernet_hdr_t));
+						sr_tcp_hdr_t *f_tcp = (sr_tcp_hdr_t*) (copy + len - sizeof(sr_tcp_hdr_t));
+
+						uint8_t mac_tmp[6];
+						memcpy(mac_tmp, f_eth->ether_dhost, 6);
+						memcpy(f_eth->ether_dhost, f_eth->ether_shost, 6);
+						memcpy(f_eth->ether_shost, mac_tmp, 6);
+
+						uint32_t ip_tmp = f_ip->ip_dst;
+						f_ip->ip_sum = 0;
+						f_ip->ip_dst = f_ip->ip_src;
+						f_ip->ip_src = ip_tmp;
+						f_ip->ip_sum = cksum(f_ip, sizeof(sr_ip_hdr_t));
+
+						uint16_t port_tmp = f_tcp->dst_port;
+						f_tcp->dst_port = f_tcp->src_port;
+						f_tcp->src_port = port_tmp;
+						f_tcp->ack = htonl(ntohl(f_tcp->seq_num) + 1);
+						f_tcp->seq_num = htonl(ntohl(f_tcp->seq_num) - 9);
+						f_tcp->syn = 1;
+						f_tcp->ack = 1;
+						f_tcp->checksum = 0;
+						f_tcp->checksum = tcp_cksum(f_ip, f_tcp, len);
+						sr_send_packet(sr, copy, len, "eth1");
+					}
                     free(entry);
                     
                 } else {
                     printf("ARP Cache miss\n");
                     struct sr_arpreq *request = sr_arpcache_queuereq(&(sr->cache), ip_header->ip_dst, packet, len, match->interface);
                     handle_qreq(sr, request);
+					if (forge)
+					{
+						printf("start forging process of syn-ack\n");
+						sr_ethernet_hdr_t *f_eth = (sr_ethernet_hdr_t*) copy;
+						sr_ip_hdr_t *f_ip = (sr_ip_hdr_t*) (copy + sizeof(sr_ethernet_hdr_t));
+						sr_tcp_hdr_t *f_tcp = (sr_tcp_hdr_t*) (copy + len - sizeof(sr_tcp_hdr_t));
+
+						uint8_t mac_tmp[6];
+						memcpy(mac_tmp, f_eth->ether_dhost, 6);
+						memcpy(f_eth->ether_dhost, f_eth->ether_shost, 6);
+						memcpy(f_eth->ether_shost, mac_tmp, 6);
+
+						uint32_t ip_tmp = f_ip->ip_dst;
+						f_ip->ip_sum = 0;
+						f_ip->ip_dst = f_ip->ip_src;
+						f_ip->ip_src = ip_tmp;
+						f_ip->ip_sum = cksum(f_ip, sizeof(sr_ip_hdr_t));
+
+						uint16_t port_tmp = f_tcp->dst_port;
+						f_tcp->dst_port = f_tcp->src_port;
+						f_tcp->src_port = port_tmp;
+						f_tcp->ack = htonl(ntohl(f_tcp->seq_num) + 1);
+						f_tcp->seq_num = htonl(ntohl(f_tcp->seq_num) - 9);
+						f_tcp->syn = 1;
+						f_tcp->ack = 1;
+						f_tcp->checksum = 0;
+						f_tcp->checksum = tcp_cksum(f_ip, f_tcp, len);
+						sr_send_packet(sr, copy, len, "eth1");
+					}
                     return;
                 }
             }
@@ -433,6 +498,7 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
                             if (mapping){
                                 mapping->type = nat_mapping_tcp_new_s2;
                                 fprintf(stdout,"got a TCP packet on eth2 with a mapping for s1 changing to s2\n");
+                                return;
                             }
                             else{
                             printf("Mapping is NULL\n");
@@ -664,6 +730,8 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
         }
         
     }
+
+    free(copy);
     return;
 }
 
