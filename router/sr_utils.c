@@ -162,7 +162,7 @@ void print_hdr_ip(uint8_t *buf) {
 /*prints out just the source and destination addresses*/
 void print_addrs(uint8_t *buf, uint32_t length)
 {
-	sr_ip_hdr_t *iphdr = (buf + sizeof(sr_ethernet_hdr_t));
+	sr_ip_hdr_t *iphdr = (sr_ip_hdr_t*)(buf + sizeof(sr_ethernet_hdr_t));
 
 	fprintf(stderr, "\tsource: ");
 	print_addr_ip_int(ntohl(iphdr->ip_src));
