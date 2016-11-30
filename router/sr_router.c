@@ -616,6 +616,7 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
                 
                 ethernet_header = (sr_ethernet_hdr_t *)packet;
                 if (icmp_header->icmp_type == ICMP_ECHO_REQ) {
+                    
                     send_icmp(sr, interface, packet, ip_header, len, 0, 0, true);
                 }
                 break;
@@ -745,6 +746,7 @@ void send_icmp(struct sr_instance* sr, char* interface, uint8_t * packet, sr_ip_
         ip_header->ip_src = ip_header->ip_dst;
         ip_header->ip_dst = new_dest;
         /*DT: will cause duplicate responses because when the response comes back, it will send the reply again*/
+        sr_arpcache_queuereq(&sr->cache, ip_header->ip_dst, packet, len, interface);
         sr_send_packet(sr, packet, len, interface);
         return;
     }
