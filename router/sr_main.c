@@ -76,7 +76,7 @@ int main(int argc, char **argv)
 
     printf("Using %s\n", VERSION_INFO);
 
-    while ((c = getopt(argc, argv, "h:s:v:p:u:t:r:l:T:n::I:E:R")) != EOF)
+    while ((c = getopt(argc, argv, "h:s:v:p:u:t:r:l:T:n::I:E:R:")) != EOF)
     {
         switch (c)
         {
@@ -187,7 +187,7 @@ int main(int argc, char **argv)
 	if(sr.nat_mode)
 	{
 		printf("Initalize nat with ko icmp: %d, tcp_new: %d tcp_old %d\n", icmp_ko, tcp_new_ko, tcp_old_ko);
-		sr_nat_init(&(sr.the_nat), icmp_ko, tcp_new_ko, tcp_old_ko);
+		sr_nat_init(&sr, icmp_ko, tcp_new_ko, tcp_old_ko);
 	}
 
     /* -- whizbang main loop ;-) */
