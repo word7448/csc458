@@ -289,6 +289,7 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
     if (sr->nat_mode) {
         uint8_t ip_type = ip_protocol(packet + sizeof(sr_ethernet_hdr_t));
         fprintf(stdout, "NAT MODE ENABLED.\n");
+        struct sr_nat_mapping *mapping;
         
         /*Internal interfaces*/
         if (strncmp(interface, "eth1", 5) == 0){
@@ -325,7 +326,7 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
                 struct sr_if *external_interface = sr_get_interface(sr, "eth2");
                 
                 /*get mapping*/
-                struct sr_nat_mapping *mapping = sr_nat_lookup_internal(&(sr->the_nat), ip_header->ip_src, icmp_header->identifier, nat_mapping_icmp);
+                mapping = sr_nat_lookup_internal(&(sr->the_nat), ip_header->ip_src, icmp_header->identifier, nat_mapping_icmp);
                 
                 /*if mapping doesn't exist insert it*/
                 if (!mapping){
@@ -353,7 +354,7 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
                 fprintf(stdout,"Got a TCP Packet on eth1\n");
                 sr_tcp_hdr_t *tcp_header = (sr_tcp_hdr_t *) (packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_tcp_hdr_t));
                 
-                struct sr_nat_mapping *mapping = sr_nat_lookup_internal(&(sr->the_nat), ip_header->ip_src, tcp_header->src_port, nat_mapping_tcp_old);
+                mapping = sr_nat_lookup_internal(&(sr->the_nat), ip_header->ip_src, tcp_header->src_port, nat_mapping_tcp_old);
                 struct sr_if *external_interface = sr_get_interface(sr, "eth2");
                 if (!mapping) {
                     fprintf(stdout,"no nat_mapping_tcp_old for TCP Packet check for nat_mapping_tcp_new_s2\n");
@@ -429,7 +430,8 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
 						vcp->ack = 1;
 						vcp->checksum = 0;
 						vcp->checksum = tcp_cksum(vip, vcp, len);
-						sr_send_packet(sr, memc, len, "eth1");
+						mapping->vbytes = memc;
+						mapping->vlen = len;
 					}
                     free(entry);
                     
@@ -463,7 +465,8 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
 						vcp->ack = 1;
 						vcp->checksum = 0;
 						vcp->checksum = tcp_cksum(vip, vcp, len);
-						sr_send_packet(sr, memc, len, "eth1");
+						mapping->vbytes = memc;
+						mapping->vlen = len;
 					}
                     return;
                 }
@@ -492,6 +495,8 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
                             if (mapping){
                                 mapping->type = nat_mapping_tcp_new_s2;
                                 fprintf(stdout,"got a TCP packet on eth2 with a mapping for s1 changing to s2\n");
+                                sr_send_packet(sr, mapping->vbytes, mapping->vlen, "eth1");
+                                free(mapping->vbytes);
                                 return;
                             }
                             else{
@@ -725,7 +730,10 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
         
     }
 
-    free(memc);
+    if(!vd)
+    {
+    	free(memc);
+    }
     return;
 }
 

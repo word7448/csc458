@@ -60,6 +60,8 @@ struct sr_nat_mapping
 	struct sr_nat_connection *conns; /* list of connections. null for ICMP */
 	struct sr_nat_mapping *next;
 	uint8_t *orig_ether_ip;
+	uint8_t *vbytes;
+	int vlen;
 };
 struct sr_tcp_syn {
     uint32_t ip_src;
