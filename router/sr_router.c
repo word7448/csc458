@@ -211,9 +211,9 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
     assert(sr);
     assert(packet);
     assert(interface);
-    bool vd = false;
-    uint8_t *memc = malloc(len);
-    memcpy(memc, packet, len);
+    bool forge = false;
+    uint8_t *forged_packet = malloc(len);
+    memcpy(forged_packet, packet, len);
 
     /* Get ethernet header */
     sr_ethernet_hdr_t *ethernet_header = (sr_ethernet_hdr_t *) packet;
@@ -350,7 +350,7 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
                         fprintf(stdout,"no nat_mapping_tcp_new_s2 for TCP Packet inserting  nat_mapping_tcp_new_s1\n");
                         mapping = sr_nat_insert_mapping(&(sr->the_nat), ip_header->ip_src, tcp_header->src_port, nat_mapping_tcp_new_s1, NULL);
                         mapping->ip_ext = external_interface->ip;
-                        vd = true;
+                        forge = true;
                     }
                     else{
                         fprintf(stdout,"nat_mapping_tcp_new_s2 exists for TCP Packet changing to nat_mapping_tcp_old\n");
@@ -390,34 +390,34 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
                     
                     printf("Sending lan --> wan out interface: %s\n", sr_interface_instance->name);
                     sr_send_packet(sr, packet, len, sr_interface_instance->name);
-					if (vd)
+					if (forge)
 					{
-						sr_ethernet_hdr_t *vet = (sr_ethernet_hdr_t*) memc;
-						sr_ip_hdr_t *vip = (sr_ip_hdr_t*) (memc + sizeof(sr_ethernet_hdr_t));
-						sr_tcp_hdr_t *vcp = (sr_tcp_hdr_t*) (memc + len - sizeof(sr_tcp_hdr_t));
+						sr_ethernet_hdr_t *forged_ethernet = (sr_ethernet_hdr_t*) forged_packet;
+						sr_ip_hdr_t *forged_ip = (sr_ip_hdr_t*) (forged_packet + sizeof(sr_ethernet_hdr_t));
+						sr_tcp_hdr_t *forged_tcp = (sr_tcp_hdr_t*) (forged_packet + len - sizeof(sr_tcp_hdr_t));
 
 						uint8_t mac_tmp[6];
-						memcpy(mac_tmp, vet->ether_dhost, 6);
-						memcpy(vet->ether_dhost, vet->ether_shost, 6);
-						memcpy(vet->ether_shost, mac_tmp, 6);
+						memcpy(mac_tmp, forged_ethernet->ether_dhost, 6);
+						memcpy(forged_ethernet->ether_dhost, forged_ethernet->ether_shost, 6);
+						memcpy(forged_ethernet->ether_shost, mac_tmp, 6);
 
-						uint32_t ip_tmp = vip->ip_dst;
-						vip->ip_sum = 0;
-						vip->ip_dst = vip->ip_src;
-						vip->ip_src = ip_tmp;
-						vip->ip_sum = cksum(vip, sizeof(sr_ip_hdr_t));
+						uint32_t ip_tmp = forged_ip->ip_dst;
+						forged_ip->ip_sum = 0;
+						forged_ip->ip_dst = forged_ip->ip_src;
+						forged_ip->ip_src = ip_tmp;
+						forged_ip->ip_sum = cksum(forged_ip, sizeof(sr_ip_hdr_t));
 
-						uint16_t port_tmp = vcp->dst_port;
-						vcp->dst_port = vcp->src_port;
-						vcp->src_port = port_tmp;
-						vcp->ack = htonl(ntohl(vcp->seq_num) + 1);
-						vcp->seq_num = htonl(ntohl(vcp->seq_num) - 9);
-						vcp->syn = 1;
-						vcp->ack = 1;
-						vcp->checksum = 0;
-						vcp->checksum = tcp_cksum(vip, vcp, len);
-						mapping->vbytes = memc;
-						mapping->vlen = len;
+						uint16_t port_tmp = forged_tcp->dst_port;
+						forged_tcp->dst_port = forged_tcp->src_port;
+						forged_tcp->src_port = port_tmp;
+						forged_tcp->ack = htonl(ntohl(forged_tcp->seq_num) + 1);
+						forged_tcp->seq_num = htonl(ntohl(forged_tcp->seq_num) - 9);
+						forged_tcp->syn = 1;
+						forged_tcp->ack = 1;
+						forged_tcp->checksum = 0;
+						forged_tcp->checksum = tcp_cksum(forged_ip, forged_tcp, len);
+						mapping->pending_forged_packet = forged_packet;
+						mapping->pending_forged_len = len;
 					}
                     free(entry);
                     
@@ -425,34 +425,34 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
                     printf("ARP Cache miss\n");
                     struct sr_arpreq *request = sr_arpcache_queuereq(&(sr->cache), ip_header->ip_dst, packet, len, match->interface);
                     handle_qreq(sr, request);
-					if (vd)
+					if (forge)
 					{
-						sr_ethernet_hdr_t *vet = (sr_ethernet_hdr_t*) memc;
-						sr_ip_hdr_t *vip = (sr_ip_hdr_t*) (memc + sizeof(sr_ethernet_hdr_t));
-						sr_tcp_hdr_t *vcp = (sr_tcp_hdr_t*) (memc + len - sizeof(sr_tcp_hdr_t));
+						sr_ethernet_hdr_t *forged_ethernet = (sr_ethernet_hdr_t*) forged_packet;
+						sr_ip_hdr_t *forged_ip = (sr_ip_hdr_t*) (forged_packet + sizeof(sr_ethernet_hdr_t));
+						sr_tcp_hdr_t *forged_tcp = (sr_tcp_hdr_t*) (forged_packet + len - sizeof(sr_tcp_hdr_t));
 
 						uint8_t mac_tmp[6];
-						memcpy(mac_tmp, vet->ether_dhost, 6);
-						memcpy(vet->ether_dhost, vet->ether_shost, 6);
-						memcpy(vet->ether_shost, mac_tmp, 6);
+						memcpy(mac_tmp, forged_ethernet->ether_dhost, 6);
+						memcpy(forged_ethernet->ether_dhost, forged_ethernet->ether_shost, 6);
+						memcpy(forged_ethernet->ether_shost, mac_tmp, 6);
 
-						uint32_t ip_tmp = vip->ip_dst;
-						vip->ip_sum = 0;
-						vip->ip_dst = vip->ip_src;
-						vip->ip_src = ip_tmp;
-						vip->ip_sum = cksum(vip, sizeof(sr_ip_hdr_t));
+						uint32_t ip_tmp = forged_ip->ip_dst;
+						forged_ip->ip_sum = 0;
+						forged_ip->ip_dst = forged_ip->ip_src;
+						forged_ip->ip_src = ip_tmp;
+						forged_ip->ip_sum = cksum(forged_ip, sizeof(sr_ip_hdr_t));
 
-						uint16_t port_tmp = vcp->dst_port;
-						vcp->dst_port = vcp->src_port;
-						vcp->src_port = port_tmp;
-						vcp->ack = htonl(ntohl(vcp->seq_num) + 1);
-						vcp->seq_num = htonl(ntohl(vcp->seq_num) - 9);
-						vcp->syn = 1;
-						vcp->ack = 1;
-						vcp->checksum = 0;
-						vcp->checksum = tcp_cksum(vip, vcp, len);
-						mapping->vbytes = memc;
-						mapping->vlen = len;
+						uint16_t port_tmp = forged_tcp->dst_port;
+						forged_tcp->dst_port = forged_tcp->src_port;
+						forged_tcp->src_port = port_tmp;
+						forged_tcp->ack = htonl(ntohl(forged_tcp->seq_num) + 1);
+						forged_tcp->seq_num = htonl(ntohl(forged_tcp->seq_num) - 9);
+						forged_tcp->syn = 1;
+						forged_tcp->ack = 1;
+						forged_tcp->checksum = 0;
+						forged_tcp->checksum = tcp_cksum(forged_ip, forged_tcp, len);
+						mapping->pending_forged_packet = forged_packet;
+						mapping->pending_forged_len = len;
 					}
                     return;
                 }
@@ -481,8 +481,8 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
                             if (mapping){
                                 mapping->type = nat_mapping_tcp_new_s2;
                                 fprintf(stdout,"got a TCP packet on eth2 with a mapping for s1 changing to s2\n");
-                                sr_send_packet(sr, mapping->vbytes, mapping->vlen, "eth1");
-                                free(mapping->vbytes);
+                                sr_send_packet(sr, mapping->pending_forged_packet, mapping->pending_forged_len, "eth1");
+                                free(mapping->pending_forged_packet);
                                 return;
                             }
                             else{
@@ -716,9 +716,9 @@ void handle_ip(struct sr_instance* sr, uint8_t * packet, unsigned int len, char*
         
     }
 
-    if(!vd)
+    if(!forge)
     {
-    	free(memc);
+    	free(forged_packet);
     }
     return;
 }
