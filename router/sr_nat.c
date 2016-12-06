@@ -34,7 +34,6 @@ int sr_nat_init(void *sr_ptr, int icmp_ko, int tcp_new_ko, int tcp_old_ko)
 	nat->icmp_ko = icmp_ko;
 	nat->tcp_new_ko = tcp_new_ko;
 	nat->tcp_old_ko = tcp_old_ko;
-	nat->incoming = NULL;
 
 	/*nothing is taken at the begining*/
 	int i;
@@ -72,22 +71,9 @@ int sr_nat_destroy(struct sr_nat *nat)
 		/*remove the mapping's connection and then itself*/
 		previous_mapping = current_mapping;
 		current_mapping = current_mapping->next;
-		remove_nat_connections(previous_mapping->conns);
 		free(previous_mapping);
 	}
 	nat->mappings = NULL;
-
-	/*remove the sr_tcp_syn*/
-	struct sr_tcp_syn *current_syn = nat->incoming;
-	struct sr_tcp_syn *previous_syn = current_syn;
-	while(current_syn != NULL)
-	{
-		previous_syn = current_syn;
-		current_syn = current_syn->next;
-		free(previous_syn->packet); /*still using ever pointer for interface name so don't have to free it*/
-		free(previous_syn);
-	}
-	nat->incoming = NULL;
 
 	pthread_kill(nat->thread, SIGKILL);
 	return pthread_mutex_destroy(&(nat->lock)) && pthread_mutexattr_destroy(&(nat->attr));
@@ -133,7 +119,6 @@ void *sr_nat_timeout(void *sr_ptr)
 					previous->next = current->next;
 				}
 				nat->icmp_id_taken[ntohs(current->aux_ext) - 1024] = false;
-				remove_nat_connections(current->conns);
 				free(current);
 				if (head_mode)
 				{
@@ -162,7 +147,6 @@ void *sr_nat_timeout(void *sr_ptr)
 					previous->next = current->next;
 				}
 				nat->port_taken[ntohs(current->aux_ext) - 1024] = false;
-				remove_nat_connections(current->conns);
 				free(current);
 				if (head_mode)
 				{
@@ -192,7 +176,6 @@ void *sr_nat_timeout(void *sr_ptr)
 					previous->next = current->next;
 				}
 				nat->port_taken[ntohs(current->aux_ext) - 1024] = false;
-				remove_nat_connections(current->conns);
 				free(current);
 				if (head_mode)
 				{
@@ -267,18 +250,6 @@ void *sr_nat_timeout(void *sr_ptr)
 	return NULL;
 }
 
-void remove_nat_connections(struct sr_nat_connection *conn)
-{
-	struct sr_nat_connection *current = conn;
-	struct sr_nat_connection *previous = conn;
-
-	while(current != NULL)
-	{
-		previous = current;
-		current = current->next;
-		free(previous);
-	}
-}
 /* Get the mapping associated with given external port.
  You must free the returned structure if it is not NULL. */
 struct sr_nat_mapping *sr_nat_lookup_external(struct sr_nat *nat, uint16_t aux_ext, sr_nat_mapping_type type)
@@ -352,6 +323,10 @@ struct sr_nat_mapping *sr_nat_insert_mapping(struct sr_nat *nat, uint32_t ip_int
 	int external = 0;
 
 	/*copy of nat internal lookup to reincarnate an old mapping*/
+	/*
+	 * This stupid assignment requires reusing the same nat external port for ALL outgoing connections for TCP
+	 * connections from the same host as long as it hasn't been timed out yet. Try to reincarnate an old TCP mapping if it exists
+	 */
 	/*copy start*/
 	print_addr_ip_int(ip_int);
 
@@ -374,6 +349,9 @@ struct sr_nat_mapping *sr_nat_insert_mapping(struct sr_nat *nat, uint32_t ip_int
 	}
 	/*copy end*/
 
+	/*
+	 * No old mapping exists for host. Nothing to reincarnate. Make a new mapping.
+	 */
 	printf("NAT: reincarnation failed\n");
 	if (pointer == NULL)
 	{
