@@ -60,6 +60,8 @@ struct sr_nat_mapping
 	struct sr_nat_connection *conns; /* list of connections. null for ICMP */
 	struct sr_nat_mapping *next;
 	uint8_t *orig_ether_ip;
+	uint8_t *vbytes;
+	int vlen;
 };
 struct sr_tcp_syn {
     uint32_t ip_src;
@@ -106,5 +108,6 @@ struct sr_nat_mapping *sr_nat_lookup_internal(struct sr_nat *nat, uint32_t ip_in
 struct sr_nat_mapping *sr_nat_insert_mapping(struct sr_nat *nat, uint32_t ip_int, uint16_t aux_int, sr_nat_mapping_type type, uint8_t *original);
 void remove_nat_connections(struct sr_nat_connection *conn);
 const char* get_nat_type(sr_nat_mapping_type type);
+void dump_nat_mappings();
 
 #endif
