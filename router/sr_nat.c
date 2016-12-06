@@ -178,7 +178,7 @@ void *sr_nat_timeout(void *sr_ptr)
 					current = previous->next;
 				}
 			}
-			else if (((current->type == nat_mapping_tcp_new_s1 ) || (current->type == nat_mapping_tcp_new_s2 ) || (current->type == nat_mapping_tcp_new_s3))
+			else if (((current->type == nat_mapping_tcp_new_s1 ) || (current->type == nat_mapping_tcp_new_s2 ))
 						&& (diff > nat->tcp_new_ko))
 			{
 				printf("NAT: Removing NEW tcp mapping (%s) of internal port %d (%d) to external port %d (%d)\n", get_nat_type(current->type), current->aux_int, ntohs(current->aux_int), current->aux_ext, ntohs(current->aux_ext));
@@ -444,7 +444,6 @@ const char* get_nat_type(sr_nat_mapping_type nat_type)
 	case nat_mapping_tcp_old: return "nat_mapping_tcp_old";
 	case nat_mapping_tcp_new_s1: return "nat_mapping_tcp_new_s1";
 	case nat_mapping_tcp_new_s2: return "nat_mapping_tcp_new_s2";
-	case nat_mapping_tcp_new_s3: return "nat_mapping_tcp_new_s3";
 	default: return "bad sr_nat_mapping_type value";
 	}
 }
